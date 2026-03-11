@@ -2,94 +2,127 @@
   <img src="./docs/assets/voxdrop-banner.svg" alt="VoxDrop banner" width="100%" />
 </p>
 
-<h1 align="center">VoxDrop</h1>
+<h1 align="center">✨ VoxDrop ✨</h1>
 
 <p align="center">
-  Hotkey-powered desktop dictation that captures your voice, cleans it with Groq, expands shortcuts, and pastes polished text straight into the app you are already using.
+  <em>Speak naturally. Let AI do the typing.</em><br/>
+  <strong>Hotkey-powered desktop dictation that captures your voice, cleans it up with Groq AI, expands your shortcuts, and seamlessly pastes polished text into any app you're using.</strong>
 </p>
 
 <p align="center">
-  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-0f172a?style=for-the-badge&logo=tauri&logoColor=24c8db" alt="Tauri 2" /></a>
-  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-111827?style=for-the-badge&logo=react&logoColor=61dafb" alt="React 19" /></a>
-  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-7-1f2937?style=for-the-badge&logo=vite&logoColor=ffd62e" alt="Vite 7" /></a>
-  <a href="https://groq.com/"><img src="https://img.shields.io/badge/Groq-Whisper%20%2B%20Llama-111827?style=for-the-badge" alt="Groq" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-0b1220?style=for-the-badge" alt="MIT license" /></a>
-  <a href="https://github.com/Kutral/VoxDrop/releases"><img src="https://img.shields.io/github/v/release/Kutral/VoxDrop?style=for-the-badge" alt="GitHub release (latest by date)" /></a>
+  <a href="https://github.com/Kutral/VoxDrop/releases">
+    <img src="https://img.shields.io/github/v/release/Kutral/VoxDrop?style=for-the-badge&color=ff69b4" alt="GitHub release" />
+  </a>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-0b1220?style=for-the-badge" alt="MIT license" />
+  </a>
 </p>
 
 ---
 
-VoxDrop is an **Open Source** tool built for the moment when typing is slower than thinking. Built with a premium **"Ethereal Dark"** aesthetic, it features glassmorphism and energy-efficient radial gradients. 
+## ⚡ Why VoxDrop?
 
-Hold a global shortcut, speak naturally, release the keys, and let the app transcribe, clean, expand your saved snippets, and paste the final text into your current workflow.
+We've all been there: your brain is moving a million miles a minute, but your fingers can't keep up. **VoxDrop is built for the moment when typing is slower than thinking.** 
 
-## 🚀 How to Get Started
-
-### Option 1: Download the Release (Recommended)
-To use VoxDrop as a standalone app, download the latest installer from the **[GitHub Releases](https://github.com/Kutral/VoxDrop/releases)** page.
-
-1. Download the `.exe` installer (for Windows).
-2. Run the installer to add VoxDrop to your Start Menu and create a Desktop Shortcut.
-
-### Option 2: Run from Source (Development)
-If you want to contribute or modify the app:
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Kutral/VoxDrop.git
-   cd VoxDrop
-   ```
-2. **Install dependencies:** `npm install`
-3. **Run in Dev Mode:** `npm run tauri dev`
-   *This launches the app with Live Reload—any changes will appear instantly.*
+Hold a single global shortcut, speak your mind naturally, and release. VoxDrop works in the background to transcribe, reformat, and instantly paste the perfect text into your active window. Perfect for emails, coding, creative writing, or just saving time!
 
 ---
 
-## ⌨️ Using the App
+## 🌟 Magic Features
 
-### Dictation Hotkey
-*   **Default:** `Ctrl + Shift + Space`
-*   **How to use:** **Hold** the hotkey to start recording. A minimal "listening pill" will float above your taskbar.
-*   **Release:** **Release** the keys to stop recording. VoxDrop will instantly transcribe, clean up the text with AI, and paste it directly at your cursor.
-
-### Customizing the Hotkey
-1. Open the main VoxDrop window.
-2. Go to the **Settings** tab.
-3. Under "Dictation Hotkey", click the input box and press your new combination (e.g., `Ctrl + Alt + V`).
-   *Note: For safety, the app requires at least 2 modifier keys (like Ctrl and Shift) to avoid accidental collisions.*
-
-### Snippets
-Enhance your typing speed by adding shortcuts:
-1. Go to the **Snippets** tab.
-2. Add a **Trigger Phrase** (e.g., `my-email`).
-3. Add the **Expansion** (e.g., `hello@example.com`).
-4. Next time you dictate that phrase, VoxDrop will automatically swap it for your expansion before pasting.
-
----
-
-## 🛠️ Tech Stack & Structure
-
-VoxDrop is built with modern, high-performance tools:
-- **Frontend:** React 19, Vite 7, TypeScript, Tailwind CSS, Framer Motion, Zustand.
-- **Backend:** Tauri 2 (Rust).
-- **AI:** Groq SDK (Whisper for transcription, Llama for cleanup).
-
-The full project breakdown lives in [project.md](./project.md).
+<table>
+  <tr>
+    <td width="50%">
+      <h3>🎙️ Instant Dictation</h3>
+      <p>Hold your global shortcut anywhere on your PC. A sleek, unobtrusive "listening pill" pops up. Speak, release, and watch the text appear.</p>
+    </td>
+    <td width="50%">
+      <h3>🧠 AI-Powered Polish</h3>
+      <p>Powered by <strong>Groq Whisper</strong> for lightning-fast transcription and <strong>Groq Llama</strong> to clean up "ums," "ahs," and formatting without changing your tone.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>✂️ Smart Snippets</h3>
+      <p>Speak a trigger phrase (like "my-email") and VoxDrop automatically expands it into your full email address or canned response before pasting.</p>
+    </td>
+    <td width="50%">
+      <h3>🎯 Native Integration</h3>
+      <p>No more copying and pasting from a separate app. VoxDrop injects the final polished text directly into whichever application currently has your focus.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🔧 Troubleshooting
+## 🚀 Get Started in Seconds
 
-### Local Data Issues
-If you find your settings or hotkeys are stuck, you can reset the local state:
-1. Open the app and press `F12` to open DevTools.
-2. Go to the **Application** tab -> **Local Storage**.
-3. Clear the data and restart the app.
+### 🎁 Option 1: Just Give Me The App! (Recommended)
+Want to start talking right away?
+1. Head over to our **[Releases Page](https://github.com/Kutral/VoxDrop/releases)**.
+2. Download the latest `.exe` installer.
+3. Run it, log in with your Groq API key, and you are ready to roll!
 
-### API Key
-VoxDrop requires a Groq API key. You can add it in `Settings -> Neural API Key`.
+### 🛠️ Option 2: I Want to Tinker (Developers)
+Love looking under the hood? 
+```bash
+# Clone the magic
+git clone https://github.com/Kutral/VoxDrop.git
+cd VoxDrop
+
+# Install dependencies
+npm install
+
+# Launch in dev mode (Live Reload enabled!)
+npm run tauri dev
+```
 
 ---
 
-## 📜 License
-This project is **Open Source** and licensed under the [MIT License](./LICENSE). Contributions are welcome!
+## 🎮 How to Use VoxDrop
+
+### The Golden Rule: Hold to Speak
+1. **Hold** `Ctrl + Shift + Space` (Default).
+2. **Speak** your thoughts.
+3. **Release** the keys. *Boom. Text pasted.*
+
+### ⚙️ Make It Yours
+Don't like the default hotkey? No problem.
+- Open the VoxDrop dashboard.
+- Head to **Settings**.
+- Click the hotkey input and press your favorite combo (e.g., `Ctrl + Alt + V`). *Note: Requires at least 2 modifier keys to keep your typing safe from accidental triggers!*
+
+### 🪄 Snippets (Your Secret Weapon)
+Stop typing the same things over and over.
+- Go to the **Snippets** tab.
+- Add a **Trigger**: `brb`
+- Add an **Expansion**: `I'll be right back, just grabbing a coffee!`
+- Next time you dictate "brb", VoxDrop does the heavy lifting.
+
+*(Pro Tip: If your settings ever feel "stuck", just open the app, press `F12` for DevTools, go to Application -> Local Storage, clear it, and restart!)*
+
+---
+
+## 🧩 The Tech Magic Behind the Curtain
+
+Built with speed, aesthetics, and performance in mind:
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Tauri-0f172a?style=for-the-badge&logo=tauri&logoColor=24c8db" alt="Tauri" />
+  <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
+  <img src="https://img.shields.io/badge/React_19-111827?style=for-the-badge&logo=react&logoColor=61dafb" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-1f2937?style=for-the-badge&logo=vite&logoColor=ffd62e" alt="Vite" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/Groq_AI-111827?style=for-the-badge&logo=openai&logoColor=white" alt="Groq" />
+</p>
+
+---
+
+<p align="center">
+  <br/>
+  Made with ❤️ by <strong>Kutral Eswar</strong>
+  <br/>
+  <br/>
+  <em>Open source and free forever. Contributions welcome!</em>
+</p>
