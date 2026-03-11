@@ -1,0 +1,95 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" rx="36" fill="#050816"/>
+  <rect width="1600" height="900" rx="36" fill="url(#bgGlow)"/>
+  <circle cx="1300" cy="170" r="280" fill="url(#pinkGlow)" fill-opacity="0.9"/>
+  <circle cx="320" cy="760" r="360" fill="url(#blueGlow)" fill-opacity="0.85"/>
+  <circle cx="1180" cy="690" r="210" fill="url(#violetGlow)" fill-opacity="0.55"/>
+  <g opacity="0.32">
+    <path d="M0 126C160 168 320 168 480 126C640 84 800 84 960 126C1120 168 1280 168 1440 126C1500 110 1554 94 1600 82V900H0V126Z" fill="url(#waveA)"/>
+    <path d="M0 192C160 234 320 234 480 192C640 150 800 150 960 192C1120 234 1280 234 1440 192C1500 176 1554 160 1600 148V900H0V192Z" fill="url(#waveB)"/>
+  </g>
+  <rect x="102" y="120" width="1396" height="660" rx="32" fill="#0A1022" fill-opacity="0.88" stroke="url(#frame)" stroke-width="2"/>
+  <rect x="138" y="156" width="1324" height="588" rx="28" fill="url(#panel)"/>
+  <rect x="186" y="210" width="302" height="480" rx="28" fill="#0B1120" stroke="#27304A"/>
+  <rect x="538" y="210" width="876" height="480" rx="28" fill="#090F1D" stroke="#26314D"/>
+  <rect x="220" y="254" width="96" height="96" rx="28" fill="url(#logoTile)"/>
+  <path d="M268 270C230.445 270 200 300.445 200 338C200 375.555 230.445 406 268 406C305.555 406 336 375.555 336 338" stroke="url(#logoStroke)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="268" cy="338" r="24" fill="url(#logoDot)"/>
+  <path d="M234 338C234 319.222 249.222 304 268 304C286.778 304 302 319.222 302 338" stroke="url(#logoAccent)" stroke-width="8" stroke-linecap="round"/>
+  <rect x="220" y="402" width="234" height="18" rx="9" fill="#1B2640"/>
+  <rect x="220" y="438" width="170" height="12" rx="6" fill="#2F3D61"/>
+  <rect x="220" y="490" width="234" height="76" rx="22" fill="#10182D" stroke="#25304A"/>
+  <rect x="246" y="516" width="72" height="24" rx="12" fill="#293B73"/>
+  <rect x="338" y="516" width="90" height="24" rx="12" fill="#16203B"/>
+  <rect x="582" y="254" width="300" height="28" rx="14" fill="#EEF2FF"/>
+  <rect x="582" y="304" width="394" height="16" rx="8" fill="#54678F"/>
+  <rect x="582" y="350" width="786" height="140" rx="28" fill="#111A31" stroke="#2A3654"/>
+  <rect x="618" y="388" width="320" height="18" rx="9" fill="#D8E2FF"/>
+  <rect x="618" y="424" width="650" height="12" rx="6" fill="#54678F"/>
+  <rect x="618" y="452" width="588" height="12" rx="6" fill="#3D4E74"/>
+  <rect x="582" y="524" width="242" height="118" rx="24" fill="#10182D" stroke="#25304A"/>
+  <rect x="852" y="524" width="242" height="118" rx="24" fill="#10182D" stroke="#25304A"/>
+  <rect x="1122" y="524" width="242" height="118" rx="24" fill="#10182D" stroke="#25304A"/>
+  <rect x="618" y="554" width="142" height="16" rx="8" fill="#A5B4FC"/>
+  <rect x="888" y="554" width="116" height="16" rx="8" fill="#C084FC"/>
+  <rect x="1158" y="554" width="136" height="16" rx="8" fill="#F472B6"/>
+  <rect x="618" y="586" width="160" height="10" rx="5" fill="#42567F"/>
+  <rect x="888" y="586" width="170" height="10" rx="5" fill="#42567F"/>
+  <rect x="1158" y="586" width="150" height="10" rx="5" fill="#42567F"/>
+  <text x="170" y="95" fill="#EEF2FF" font-family="Segoe UI, Arial, sans-serif" font-size="62" font-weight="700">VoxDrop</text>
+  <text x="170" y="150" fill="#9FB0D8" font-family="Segoe UI, Arial, sans-serif" font-size="28">Hotkey dictation for desktop apps, refined with Groq and delivered instantly.</text>
+  <defs>
+    <linearGradient id="bgGlow" x1="113" y1="40" x2="1481" y2="851" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1020"/>
+      <stop offset="0.48" stop-color="#0B1024"/>
+      <stop offset="1" stop-color="#070B16"/>
+    </linearGradient>
+    <radialGradient id="pinkGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1300 170) rotate(90) scale(280)">
+      <stop stop-color="#F472B6"/>
+      <stop offset="1" stop-color="#F472B6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blueGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 760) rotate(90) scale(360)">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violetGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1180 690) rotate(90) scale(210)">
+      <stop stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="waveA" x1="0" y1="126" x2="1600" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="0.5" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+    <linearGradient id="waveB" x1="0" y1="192" x2="1600" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.5" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#DB2777"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="102" y1="120" x2="1498" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.45" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="138" y1="156" x2="1462" y2="744" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1222"/>
+      <stop offset="1" stop-color="#09101D"/>
+    </linearGradient>
+    <linearGradient id="logoTile" x1="220" y1="254" x2="316" y2="350" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E3A8A"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="logoStroke" x1="200" y1="270" x2="336" y2="406" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A5B4FC"/>
+      <stop offset="1" stop-color="#F9A8D4"/>
+    </linearGradient>
+    <linearGradient id="logoDot" x1="244" y1="314" x2="292" y2="362" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#C084FC"/>
+    </linearGradient>
+    <linearGradient id="logoAccent" x1="234" y1="338" x2="302" y2="338" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F472B6"/>
+      <stop offset="1" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main", "pill"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "global-shortcut:default",
+    "sql:default",
+    "os:default"
+  ]
+}

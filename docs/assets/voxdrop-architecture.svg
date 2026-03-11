@@ -1,0 +1,41 @@
+<svg width="1400" height="820" viewBox="0 0 1400 820" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="820" rx="32" fill="#07111F"/>
+  <circle cx="190" cy="110" r="180" fill="#15315E"/>
+  <circle cx="1210" cy="710" r="220" fill="#24194E"/>
+  <text x="90" y="88" fill="#EEF2FF" font-family="Segoe UI, Arial, sans-serif" font-size="42" font-weight="700">VoxDrop Runtime Flow</text>
+  <text x="90" y="126" fill="#93A4C7" font-family="Segoe UI, Arial, sans-serif" font-size="20">Global shortcut to polished text paste, with local state and native window orchestration.</text>
+  <rect x="90" y="190" width="250" height="120" rx="24" fill="#0D1A31" stroke="#2B4C7C"/>
+  <text x="122" y="242" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">1. Hotkey</text>
+  <text x="122" y="278" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Tauri global shortcut opens</text>
+  <text x="122" y="304" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">the floating pill window.</text>
+  <rect x="430" y="190" width="250" height="120" rx="24" fill="#0D1A31" stroke="#395D95"/>
+  <text x="462" y="242" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">2. Record</text>
+  <text x="462" y="278" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Rust captures microphone</text>
+  <text x="462" y="304" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">audio with `cpal` and WAV.</text>
+  <rect x="770" y="190" width="250" height="120" rx="24" fill="#0D1A31" stroke="#5A50A2"/>
+  <text x="802" y="242" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">3. Transcribe</text>
+  <text x="802" y="278" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Groq Whisper converts</text>
+  <text x="802" y="304" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">speech to raw text.</text>
+  <rect x="1060" y="190" width="250" height="120" rx="24" fill="#0D1A31" stroke="#8F478B"/>
+  <text x="1092" y="242" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">4. Clean</text>
+  <text x="1092" y="278" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Groq Llama formats text</text>
+  <text x="1092" y="304" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">without changing intent.</text>
+  <rect x="220" y="470" width="300" height="150" rx="28" fill="#0D1A31" stroke="#2D4F7E"/>
+  <text x="256" y="530" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">5. Expand Snippets</text>
+  <text x="256" y="570" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Trigger phrases are replaced with stored</text>
+  <text x="256" y="596" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">expansions from the persisted Zustand store.</text>
+  <rect x="560" y="470" width="300" height="150" rx="28" fill="#0D1A31" stroke="#5550A2"/>
+  <text x="596" y="530" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">6. Save Activity</text>
+  <text x="596" y="570" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">The main dashboard receives synced</text>
+  <text x="596" y="596" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">history items and updates the log UI.</text>
+  <rect x="900" y="470" width="300" height="150" rx="28" fill="#0D1A31" stroke="#8A4689"/>
+  <text x="936" y="530" fill="#F8FAFF" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">7. Paste</text>
+  <text x="936" y="570" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">Rust copies to clipboard and simulates</text>
+  <text x="936" y="596" fill="#A8B7D8" font-family="Segoe UI, Arial, sans-serif" font-size="18">`Ctrl+V` into the focused desktop app.</text>
+  <path d="M340 250H430" stroke="#7C93C5" stroke-width="6" stroke-linecap="round"/>
+  <path d="M680 250H770" stroke="#8B8FDD" stroke-width="6" stroke-linecap="round"/>
+  <path d="M1020 250H1060" stroke="#BB7ACD" stroke-width="6" stroke-linecap="round"/>
+  <path d="M1185 310V396H370V470" stroke="#CC8BBA" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M520 545H560" stroke="#7D93C5" stroke-width="6" stroke-linecap="round"/>
+  <path d="M860 545H900" stroke="#B37BD0" stroke-width="6" stroke-linecap="round"/>
+</svg>
