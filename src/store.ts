@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 interface Snippet {
   id: number;
@@ -14,6 +14,8 @@ interface HistoryItem {
   duration_seconds: number;
   created_at: string;
 }
+
+const MAX_HISTORY_ITEMS = 100;
 
 interface AppState {
   apiKey: string;
@@ -64,15 +66,23 @@ export const useAppStore = create<AppState>()(
       addSnippet: (snippet) => set((state) => ({ snippets: [...state.snippets, snippet] })),
       removeSnippet: (id) => set((state) => ({ snippets: state.snippets.filter(s => s.id !== id) })),
       setHistory: (history) => set({ history }),
-      addHistoryItem: (item) => set((state) => ({ history: [item, ...state.history] })),
+      addHistoryItem: (item) => set((state) => {
+        const dedupedHistory = state.history.filter((entry) => entry.id !== item.id);
+        return {
+          history: [item, ...dedupedHistory].slice(0, MAX_HISTORY_ITEMS),
+        };
+      }),
     }),
     {
       name: 'voxdrop-storage',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
         apiKey: state.apiKey, 
         whisperModel: state.whisperModel, 
         llamaModel: state.llamaModel,
+        hotkey: state.hotkey,
         snippets: state.snippets,
+        history: state.history,
       }),
     }
   )

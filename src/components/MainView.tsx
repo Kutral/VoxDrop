@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { testApiKey } from '../lib/groq';
 import { listen } from '@tauri-apps/api/event';
@@ -13,15 +13,22 @@ export function MainView() {
     let cancelled = false;
     let unlistenFn: (() => void) | null = null;
 
-    listen<string>('history-sync', (event) => {
+    listen<unknown>('history-sync', (event) => {
       if (cancelled) return;
       try {
-        const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+        const payload = typeof event.payload === 'string'
+          ? JSON.parse(event.payload)
+          : event.payload;
+
+        if (!payload || typeof payload !== 'object' || !('id' in payload)) {
+          return;
+        }
+
         const current = useAppStore.getState().history;
         if (!current.find(h => h.id === payload.id)) {
-          useAppStore.getState().addHistoryItem(payload);
+          useAppStore.getState().addHistoryItem(payload as any);
         }
-      } catch (e) {
+      } catch {
         // Fallback: ignore parse errors
       }
     }).then(fn => {
@@ -63,8 +70,8 @@ export function MainView() {
     <div className="w-screen h-screen bg-[#050505] text-zinc-100 flex relative overflow-hidden font-sans p-4 gap-4">
       {/* Background Ambience (Optimized for RAM: using simple radial gradients instead of heavy DOM blur filters) */}
       <div className="absolute inset-0 noise-bg z-0"></div>
-      <div className="absolute -top-[400px] -left-[400px] w-[800px] h-[800px] rounded-full pointer-events-none opacity-20" style={{ background: 'radial-gradient(circle, #4f46e5 0%, transparent 60%)' }}></div>
-      <div className="absolute top-[200px] -right-[400px] w-[800px] h-[800px] rounded-full pointer-events-none opacity-10" style={{ background: 'radial-gradient(circle, #7c3aed 0%, transparent 60%)' }}></div>
+      <div className="absolute -top-[260px] -left-[260px] w-[520px] h-[520px] rounded-full pointer-events-none opacity-[0.12]" style={{ background: 'radial-gradient(circle, rgba(79,70,229,0.22) 0%, transparent 65%)' }}></div>
+      <div className="absolute top-[160px] -right-[240px] w-[420px] h-[420px] rounded-full pointer-events-none opacity-10" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 68%)' }}></div>
 
       {/* Sidebar */}
       <div className="w-[88px] h-full flex flex-col items-center py-8 bg-zinc-900 border border-white/5 rounded-[24px] relative z-10">
@@ -109,7 +116,7 @@ export function MainView() {
       <div className="flex-1 h-full bg-zinc-900 border border-white/5 rounded-[24px] relative z-10 overflow-hidden flex flex-col">
          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
          
-         <div className="flex-1 overflow-y-auto custom-scrollbar p-10 relative">
+         <div className="content-scroll flex-1 overflow-y-auto custom-scrollbar p-10 relative">
             <div className="max-w-[800px] mx-auto w-full relative z-10">
               {tab === 'history' && <HistoryTab />}
               {tab === 'snippets' && <SnippetsTab />}
@@ -124,9 +131,13 @@ export function MainView() {
 function HistoryTab() {
   const history = useAppStore(state => state.history);
   const setHistory = useAppStore(state => state.setHistory);
+  const sortedHistory = useMemo(
+    () => [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    [history]
+  );
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="pb-6">
       <div className="flex justify-between items-end mb-12">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-white pb-1">Activity Log</h1>
@@ -141,7 +152,7 @@ function HistoryTab() {
       </div>
       
       <div className="space-y-4">
-        {history.length === 0 ? (
+        {sortedHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 px-4 rounded-3xl border border-white/5 bg-white/[0.01]">
             <div className="w-20 h-20 rounded-3xl bg-white/[0.03] border border-white/5 flex items-center justify-center mb-6">
               <Sparkles className="w-8 h-8 text-indigo-400/50" />
@@ -150,16 +161,16 @@ function HistoryTab() {
             <p className="text-zinc-500 text-sm mt-2">Use your hotkey to start recording.</p>
           </div>
         ) : (
-          [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(item => (
-            <div key={item.id} className="p-6 rounded-3xl bg-zinc-950 border border-white/5 hover:border-indigo-500/30 transition-colors relative overflow-hidden group">
+          sortedHistory.map(item => (
+            <div key={item.id} className="p-5 rounded-[22px] bg-zinc-950/90 border border-white/5 hover:border-indigo-500/20 transition-colors">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+                  <div className="w-2 h-2 rounded-full bg-indigo-500/50"></div>
                   <span className="text-xs uppercase tracking-[0.2em] font-semibold text-zinc-500">{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
                 </div>
                 <button 
                   onClick={() => navigator.clipboard.writeText(item.transcript)}
-                  className="opacity-0 group-hover:opacity-100 text-[11px] uppercase tracking-wider font-bold bg-white/5 hover:bg-indigo-500/20 hover:text-indigo-300 text-zinc-400 px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+                  className="text-[11px] uppercase tracking-wider font-bold bg-white/5 hover:bg-indigo-500/20 hover:text-indigo-300 text-zinc-400 px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
                 >
                   <ClipboardList className="w-3.5 h-3.5" />
                   Copy
@@ -196,7 +207,7 @@ function SnippetsTab() {
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="pb-6">
       <div className="flex justify-between items-end mb-12">
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-white pb-1">Snippets</h1>
@@ -344,7 +355,7 @@ function SettingsTab() {
   );
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 pb-20">
+    <div className="pb-20">
       <div className="mb-12">
         <h1 className="text-4xl font-bold tracking-tight text-white pb-1">Preferences</h1>
         <p className="text-zinc-400 mt-2 text-[15px] max-w-sm">Fine-tune the intelligence engine behind VoxDrop.</p>
@@ -448,4 +459,3 @@ function SettingsTab() {
     </div>
   );
 }
-
