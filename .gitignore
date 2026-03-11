@@ -18,6 +18,9 @@ src-tauri/target
 src-tauri/*.db
 src-tauri/*.db-*
 
+# Agents
+.agents/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

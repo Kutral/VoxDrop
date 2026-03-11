@@ -28,109 +28,137 @@ export function PillView() {
     }
   }, [pillState]);
 
-  // Set up event listeners ONCE — use refs for current values
+  // Listen for settings changes from the main window and rehydrate store
   useEffect(() => {
-    const unlistenDownPromise = listen('shortcut-down', async () => {
-      const apiKey = useAppStore.getState().apiKey;
-      
-      if (!apiKey) {
-        setPillState('error');
-        setStatusMsg('API Key missing — set it in Settings');
-        setTimeout(() => {
-          setPillState('hidden');
-        }, 3000);
-        return;
-      }
-      
-      setPillState('listening');
-      setStatusMsg('Listening...');
-      
-      try {
-        await invoke('start_recording');
-      } catch (e) {
-        setPillState('error');
-        setStatusMsg('Mic error');
-        setTimeout(() => {
-          setPillState('hidden');
-        }, 3000);
-      }
-    });
-
-    const unlistenUpPromise = listen('shortcut-up', async () => {
-      // Use ref to get latest state — avoids stale closure
-      if (pillStateRef.current !== 'listening') return;
-      
-      setPillState('processing');
-      setStatusMsg('Transcribing...');
-      
-      try {
-        const base64Audio: string = await invoke('stop_recording');
-        
-        const { apiKey, whisperModel, llamaModel } = useAppStore.getState();
-        
-        // Transcription
-        const rawText = await transcribeAudio(base64Audio, apiKey, whisperModel);
-        
-        if (!rawText || rawText.trim().length === 0) {
-          setPillState('hidden');
-          return;
-        }
-
-        // Cleanup
-        setStatusMsg('Cleaning up...');
-        let cleanText = await cleanupText(rawText, apiKey, llamaModel);
-        
-        // Snippet Expansion — case-insensitive, handles hyphens/periods from cleanup
-        const snippets = useAppStore.getState().snippets;
-        for (const snippet of snippets) {
-          const trigger = snippet.trigger_phrase.toLowerCase();
-          // Normalize: remove hyphens and extra spaces for matching
-          const normalizedText = cleanText.toLowerCase().replace(/-/g, '');
-          const normalizedTrigger = trigger.replace(/-/g, '');
-          if (normalizedText.includes(normalizedTrigger)) {
-            // Build a flexible regex that matches the trigger with optional hyphens
-            const escapedTrigger = snippet.trigger_phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const flexPattern = escapedTrigger.split('').join('-?');
-            cleanText = cleanText.replace(new RegExp(flexPattern, 'gi'), snippet.expansion);
-          }
-        }
-        
-        // Create history item
-        const historyItem = {
-          id: Date.now(),
-          transcript: cleanText,
-          duration_seconds: 0,
-          created_at: new Date().toISOString()
-        };
-
-        // Save to local store
-        useAppStore.getState().addHistoryItem(historyItem);
-
-        // Emit to main window for history sync
-        await emit('history-update', historyItem);
-
-        // Paste into the user's focused app
-        await invoke('paste_text', { text: cleanText });
-
-        setPillState('done');
-        setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
-        
-        setTimeout(() => {
-          setPillState('hidden');
-        }, 1800);
-
-      } catch (err: any) {
-        setPillState('error');
-        setStatusMsg(err.message?.includes('429') ? 'Rate limit hit' : 'Processing failed');
-        setTimeout(() => {
-          setPillState('hidden');
-        }, 3000);
-      }
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+    
+    listen('settings-changed', async () => {
+      if (cancelled) return;
+      // Force zustand persist to pull fresh data from localStorage
+      await useAppStore.persist.rehydrate();
+    }).then(fn => {
+      if (cancelled) fn();
+      else unlistenFn = fn;
     });
 
     return () => {
-      unlistenDownPromise.then(f => f());
-      unlistenUpPromise.then(f => f());
+      cancelled = true;
+      if (unlistenFn) unlistenFn();
+    };
+  }, []);
+
+  // Set up event listeners ONCE — but only AFTER the persisted store has rehydrated
+  useEffect(() => {
+    let unlistenDown: (() => void) | null = null;
+    let unlistenUp: (() => void) | null = null;
+    let cancelled = false;
+
+    const setup = async () => {
+      // Wait for zustand-persist to finish loading from localStorage
+      await new Promise<void>((resolve) => {
+        if (useAppStore.persist.hasHydrated()) {
+          resolve();
+        } else {
+          const unsub = useAppStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        }
+      });
+
+      if (cancelled) return;
+
+      // Now listeners are safe — apiKey will be available via getState()
+      unlistenDown = await listen('shortcut-down', async () => {
+        const apiKey = useAppStore.getState().apiKey;
+        
+        if (!apiKey) {
+          setPillState('error');
+          setStatusMsg('API Key missing — set it in Settings');
+          setTimeout(() => { setPillState('hidden'); }, 3000);
+          return;
+        }
+        
+        setPillState('listening');
+        setStatusMsg('Listening...');
+        
+        try {
+          await invoke('start_recording');
+        } catch (e) {
+          setPillState('error');
+          setStatusMsg('Mic error');
+          setTimeout(() => { setPillState('hidden'); }, 3000);
+        }
+      });
+
+      unlistenUp = await listen('shortcut-up', async () => {
+        // Use ref to get latest state — avoids stale closure
+        if (pillStateRef.current !== 'listening') return;
+        
+        setPillState('processing');
+        setStatusMsg('Transcribing...');
+        
+        try {
+          const base64Audio: string = await invoke('stop_recording');
+          
+          const { apiKey, whisperModel, llamaModel } = useAppStore.getState();
+          
+          // Transcription
+          const rawText = await transcribeAudio(base64Audio, apiKey, whisperModel);
+          
+          if (!rawText || rawText.trim().length === 0) {
+            setPillState('hidden');
+            return;
+          }
+
+          // Cleanup
+          setStatusMsg('Cleaning up...');
+          let cleanText = await cleanupText(rawText, apiKey, llamaModel);
+          
+          // Snippet Expansion — case-insensitive, handles hyphens/periods from cleanup
+          const snippets = useAppStore.getState().snippets;
+          for (const snippet of snippets) {
+            const trigger = snippet.trigger_phrase.toLowerCase();
+            const normalizedText = cleanText.toLowerCase().replace(/-/g, '');
+            const normalizedTrigger = trigger.replace(/-/g, '');
+            if (normalizedText.includes(normalizedTrigger)) {
+              const escapedTrigger = snippet.trigger_phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const flexPattern = escapedTrigger.split('').join('-?');
+              cleanText = cleanText.replace(new RegExp(flexPattern, 'gi'), snippet.expansion);
+            }
+          }
+          
+          // Create history item
+          const historyItem = {
+            id: Date.now(),
+            transcript: cleanText,
+            duration_seconds: 0,
+            created_at: new Date().toISOString()
+          };
+
+          useAppStore.getState().addHistoryItem(historyItem);
+          await emit('history-update', historyItem);
+          await invoke('paste_text', { text: cleanText });
+
+          setPillState('done');
+          setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
+          setTimeout(() => { setPillState('hidden'); }, 1800);
+
+        } catch (err: any) {
+          setPillState('error');
+          setStatusMsg(err.message?.includes('429') ? 'Rate limit hit' : 'Processing failed');
+          setTimeout(() => { setPillState('hidden'); }, 3000);
+        }
+      });
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      unlistenDown?.();
+      unlistenUp?.();
     };
   }, []); // Empty deps — listeners set up once, use refs/getState for current values
 

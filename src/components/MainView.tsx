@@ -1,12 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { testApiKey } from '../lib/groq';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command } from 'lucide-react';
 
 export function MainView() {
   const [tab, setTab] = useState<'history' | 'snippets' | 'settings'>('history');
+
+  // Track settings changes and broadcast to pill window so it can rehydrate
+  const { apiKey, whisperModel, llamaModel, snippets } = useAppStore();
+  useEffect(() => {
+    emit('settings-changed').catch(console.error);
+  }, [apiKey, whisperModel, llamaModel, snippets]);
 
   // Listen for history events from pill window
   useEffect(() => {
