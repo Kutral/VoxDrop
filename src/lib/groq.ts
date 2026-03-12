@@ -1,5 +1,31 @@
 import Groq from "groq-sdk";
 
+function normalizeForComparison(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function shouldUseRawTranscript(rawText: string, cleanedText: string): boolean {
+  const rawWords = normalizeForComparison(rawText);
+  const cleanedWords = normalizeForComparison(cleanedText);
+
+  if (!cleanedWords.length) {
+    return true;
+  }
+
+  const rawWordSet = new Set(rawWords);
+  const overlapCount = cleanedWords.filter((word) => rawWordSet.has(word)).length;
+  const overlapRatio = overlapCount / Math.max(cleanedWords.length, 1);
+  const looksLikeAssistantReply = /^(sure|absolutely|yes|no|here('| i)?s|the answer|i can|i'm|let me)\b/i.test(
+    cleanedText.trim()
+  );
+
+  return looksLikeAssistantReply || overlapRatio < 0.45;
+}
+
 export async function transcribeAudio(
   base64Audio: string,
   apiKey: string,
@@ -63,7 +89,8 @@ CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. 
     max_tokens: maxOutputTokens,
   });
 
-  return chatCompletion.choices[0]?.message?.content || rawText;
+  const cleanedText = chatCompletion.choices[0]?.message?.content?.trim() || rawText;
+  return shouldUseRawTranscript(rawText, cleanedText) ? rawText.trim() : cleanedText;
 }
 
 export async function testApiKey(apiKey: string): Promise<boolean> {

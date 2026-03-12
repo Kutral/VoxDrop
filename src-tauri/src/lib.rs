@@ -7,22 +7,82 @@ fn greet(name: &str) -> String {
 mod audio;
 mod db;
 mod paste;
+mod windows_hotkey;
 
-use tauri::{Manager, Emitter, Listener};
+use tauri::menu::MenuBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Listener, Manager};
+
+const DEFAULT_HOTKEY: &str = "Control+Super";
+const TRAY_ID: &str = "voxdrop-tray";
+const TRAY_SHOW_ID: &str = "show";
+const TRAY_QUIT_ID: &str = "quit";
+
+fn hotkey_is_modifier_only(value: &str) -> bool {
+    let mut part_count = 0;
+
+    for raw_part in value.split('+') {
+        let part = raw_part.trim().to_ascii_lowercase();
+        if part.is_empty() {
+            continue;
+        }
+
+        part_count += 1;
+
+        match part.as_str() {
+            "control" | "ctrl" | "alt" | "option" | "shift" | "super" | "meta" | "command"
+            | "cmd" => {}
+            _ => return false,
+        }
+    }
+
+    part_count >= 2
+}
+
+fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("pill") {
+        if let Ok(Some(monitor)) = window.primary_monitor() {
+            let screen_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let pill_w = 320.0;
+            let pill_h = 48.0;
+            let x = ((screen_size.width as f64 / scale) - pill_w) / 2.0;
+            let y = (screen_size.height as f64 / scale) - pill_h - 80.0;
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+        }
+        let _ = window.show();
+    }
+}
 
 #[tauri::command]
 fn update_hotkey(app: tauri::AppHandle, new_hotkey: String) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
     use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    let normalized_hotkey = new_hotkey.trim().to_string();
+    windows_hotkey::set_hotkey(&normalized_hotkey);
 
     // Unregister whatever is currently active
     let _ = app.global_shortcut().unregister_all();
 
+    if hotkey_is_modifier_only(&normalized_hotkey) {
+        return Ok(());
+    }
+
     // Register the new hotkey
-    let new_shortcut = Shortcut::from_str(&new_hotkey)
+    let new_shortcut = Shortcut::from_str(&normalized_hotkey)
         .map_err(|e| format!("Invalid shortcut format: {}", e))?;
-    
-    app.global_shortcut().register(new_shortcut)
+
+    app.global_shortcut()
+        .register(new_shortcut)
         .map_err(|e| format!("Failed to register shortcut: {}", e))?;
 
     Ok(())
@@ -32,8 +92,35 @@ fn update_hotkey(app: tauri::AppHandle, new_hotkey: String) -> Result<(), String
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .manage(std::sync::Mutex::new(audio::AudioState::default()))
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            TRAY_SHOW_ID => show_main_window(app),
+            TRAY_QUIT_ID => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_sql::Builder::default().add_migrations("sqlite:voxdrop.db", db::get_migrations()).build())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:voxdrop.db", db::get_migrations())
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -50,18 +137,6 @@ pub fn run() {
                 // Since Voxdrop only uses ONE global hotkey, we can trigger on any match.
                 match event.state() {
                     ShortcutState::Pressed => {
-                        if let Some(window) = app.get_webview_window("pill") {
-                            if let Ok(Some(monitor)) = window.primary_monitor() {
-                                let screen_size = monitor.size();
-                                let scale = monitor.scale_factor();
-                                let pill_w = 320.0;
-                                let pill_h = 48.0;
-                                let x = ((screen_size.width as f64 / scale) - pill_w) / 2.0;
-                                let y = (screen_size.height as f64 / scale) - pill_h - 80.0; // 80px from bottom to clear taskbar
-                                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
-                            }
-                            let _ = window.show();
-                        }
                         let _ = app.emit("shortcut-down", ());
                     }
                     ShortcutState::Released => {
@@ -69,13 +144,28 @@ pub fn run() {
                     }
                 }
             })
-            .build()
+            .build(),
     );
 
     builder = builder.setup(|app| {
-        use tauri_plugin_global_shortcut::GlobalShortcutExt;
-        let default_shortcut = tauri_plugin_global_shortcut::Shortcut::new(Some(tauri_plugin_global_shortcut::Modifiers::CONTROL | tauri_plugin_global_shortcut::Modifiers::SHIFT), tauri_plugin_global_shortcut::Code::Space);
-        let _ = app.global_shortcut().register(default_shortcut);
+        let tray_menu = MenuBuilder::new(app)
+            .text(TRAY_SHOW_ID, "Open VoxDrop")
+            .separator()
+            .text(TRAY_QUIT_ID, "Quit")
+            .build()?;
+
+        TrayIconBuilder::with_id(TRAY_ID)
+            .menu(&tray_menu)
+            .show_menu_on_left_click(false)
+            .tooltip("VoxDrop")
+            .icon(app.default_window_icon().cloned().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::Other, "Missing app icon")
+            })?)
+            .build(app)?;
+
+        windows_hotkey::install(app.handle().clone());
+        update_hotkey(app.handle().clone(), DEFAULT_HOTKEY.to_string())
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
         if let Some(window) = app.get_webview_window("pill") {
             let _ = window.hide();
@@ -88,6 +178,11 @@ pub fn run() {
             if let Some(window) = app_handle.get_webview_window("pill") {
                 let _ = window.hide();
             }
+        });
+
+        let app_handle3 = app.handle().clone();
+        app.listen("shortcut-down", move |_event| {
+            show_pill_window(&app_handle3);
         });
 
         // Relay history-update from pill window to all windows (JS emit only reaches Rust)

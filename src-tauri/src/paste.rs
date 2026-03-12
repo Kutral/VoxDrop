@@ -7,7 +7,9 @@ pub fn paste_text(text: String) -> Result<(), String> {
     use arboard::Clipboard;
 
     let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard error: {}", e))?;
-    clipboard.set_text(&text).map_err(|e| format!("Failed to set clipboard: {}", e))?;
+    clipboard
+        .set_text(&text)
+        .map_err(|e| format!("Failed to set clipboard: {}", e))?;
 
     // Give a small delay for the clipboard to be set
     thread::sleep(Duration::from_millis(150));
@@ -15,7 +17,7 @@ pub fn paste_text(text: String) -> Result<(), String> {
     // Simulate Ctrl+V using enigo
     use enigo::{Enigo, KeyboardControllable};
     let mut enigo = Enigo::new();
-    
+
     // Press Ctrl+V
     enigo.key_down(enigo::Key::Control);
     thread::sleep(Duration::from_millis(30));

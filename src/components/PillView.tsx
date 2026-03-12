@@ -13,6 +13,23 @@ function hidePillWindow() {
   emit('pill-hide').catch(() => {});
 }
 
+function describeProcessingError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return 'Processing failed';
+  }
+
+  const message = err.message.trim();
+  if (!message) {
+    return 'Processing failed';
+  }
+
+  if (message.includes('429')) return 'Rate limit hit';
+  if (/401|invalid api key|unauthorized/i.test(message)) return 'Invalid API key';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'Network error';
+
+  return message.length > 56 ? `${message.slice(0, 53)}...` : message;
+}
+
 export function PillView() {
   const [pillState, setPillState] = useState<PillState>('hidden');
   const [statusMsg, setStatusMsg] = useState('');
@@ -145,9 +162,9 @@ export function PillView() {
           setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
           setTimeout(() => { setPillState('hidden'); }, 1800);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
           setPillState('error');
-          setStatusMsg(err.message?.includes('429') ? 'Rate limit hit' : 'Processing failed');
+          setStatusMsg(describeProcessingError(err));
           setTimeout(() => { setPillState('hidden'); }, 3000);
         }
       });

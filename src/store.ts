@@ -16,6 +16,7 @@ interface HistoryItem {
 }
 
 const MAX_HISTORY_ITEMS = 100;
+export const DEFAULT_HOTKEY = 'Control+Super';
 
 interface AppState {
   apiKey: string;
@@ -48,7 +49,7 @@ export const useAppStore = create<AppState>()(
       apiKey: import.meta.env.VITE_GROQ_API_KEY ?? '',
       whisperModel: 'whisper-large-v3-turbo',
       llamaModel: 'llama-3.1-8b-instant',
-      hotkey: 'Control+Shift+Space',
+      hotkey: DEFAULT_HOTKEY,
       isRecording: false,
       isProcessing: false,
       statusMessage: '',

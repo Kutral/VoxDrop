@@ -1,18 +1,48 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useAppStore } from '../store';
+import { DEFAULT_HOTKEY, useAppStore } from '../store';
 import { testApiKey } from '../lib/groq';
+import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type ReleaseCheckResult } from '../lib/updates';
 import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command } from 'lucide-react';
 
 export function MainView() {
   const [tab, setTab] = useState<'history' | 'snippets' | 'settings'>('history');
 
   // Track settings changes and broadcast to pill window so it can rehydrate
-  const { apiKey, whisperModel, llamaModel, snippets } = useAppStore();
+  const { apiKey, whisperModel, llamaModel, snippets, hotkey } = useAppStore();
   useEffect(() => {
     emit('settings-changed').catch(console.error);
-  }, [apiKey, whisperModel, llamaModel, snippets]);
+  }, [apiKey, whisperModel, llamaModel, snippets, hotkey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncHotkey = async () => {
+      if (!useAppStore.persist.hasHydrated()) {
+        await new Promise<void>((resolve) => {
+          const unsub = useAppStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        });
+      }
+
+      if (cancelled) return;
+
+      const persistedHotkey = useAppStore.getState().hotkey || DEFAULT_HOTKEY;
+      invoke('update_hotkey', { newHotkey: persistedHotkey }).catch((err) => {
+        console.warn('Could not sync persisted hotkey:', err);
+      });
+    };
+
+    syncHotkey();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Listen for history events from pill window
   useEffect(() => {
@@ -303,6 +333,27 @@ function SettingsTab() {
   const { apiKey, setApiKey, whisperModel, setWhisperModel, llamaModel, setLlamaModel, hotkey, setHotkey } = useAppStore();
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
+  const [capturedKeys, setCapturedKeys] = useState<string[]>([]);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'current' | 'error'>('idle');
+  const [updateInfo, setUpdateInfo] = useState<ReleaseCheckResult | null>(null);
+  const [updateError, setUpdateError] = useState('');
+
+  useEffect(() => {
+    getInstalledVersion()
+      .then((version) => {
+        setUpdateInfo((current) => current ?? {
+          currentVersion: version,
+          latestVersion: null,
+          hasUpdate: false,
+          htmlUrl: RELEASES_PAGE_URL,
+          publishedAt: null,
+          notes: '',
+        });
+      })
+      .catch(() => {
+        // Ignore version lookup issues in settings; manual checks still work.
+      });
+  }, []);
   
   const handleTestKey = async () => {
     if (!apiKey) return;
@@ -312,44 +363,122 @@ function SettingsTab() {
     setTimeout(() => setTestStatus('idle'), 3000);
   };
 
-  const DEFAULT_HOTKEY = 'Control+Shift+Space';
+  const MODIFIER_ORDER = ['Control', 'Alt', 'Shift', 'Super'] as const;
+
+  const normalizeKeyName = (key: string) => {
+    const lowered = key.toLowerCase();
+    if (lowered === 'control') return 'Control';
+    if (lowered === 'alt') return 'Alt';
+    if (lowered === 'shift') return 'Shift';
+    if (lowered === 'meta' || lowered === 'os' || lowered === 'super') return 'Super';
+    if (lowered === ' ') return 'Space';
+    if (key.length === 1) return key.toUpperCase();
+    return key.length > 1 ? `${key[0].toUpperCase()}${key.slice(1)}` : key;
+  };
+
+  const isModifierKey = (key: string) => MODIFIER_ORDER.includes(key as (typeof MODIFIER_ORDER)[number]);
+
+  const sortShortcutParts = (parts: string[]) => {
+    const unique = [...new Set(parts)];
+    const modifiers = MODIFIER_ORDER.filter((modifier) => unique.includes(modifier));
+    const mainKeys = unique.filter((part) => !MODIFIER_ORDER.includes(part as (typeof MODIFIER_ORDER)[number]));
+    return [...modifiers, ...mainKeys];
+  };
+
+  const formatHotkeyLabel = (value: string) =>
+    value
+      .split('+')
+      .filter(Boolean)
+      .map((part) => {
+        if (part === 'Control') return 'Ctrl';
+        if (part === 'Super') return 'Win';
+        return part;
+      })
+      .join(' + ');
+
+  const saveHotkey = (parts: string[]) => {
+    const normalized = sortShortcutParts(parts);
+    const modifierCount = normalized.filter(isModifierKey).length;
+
+    if (normalized.length === 0 || modifierCount < 2) {
+      return;
+    }
+
+    const newHotkey = normalized.join('+');
+    setHotkey(newHotkey);
+    invoke('update_hotkey', { newHotkey }).catch((err) => {
+      console.warn('Could not register hotkey:', err);
+    });
+    setCapturedKeys([]);
+    setIsRecordingHotkey(false);
+  };
 
   const handleHotkeyRecord = (e: React.KeyboardEvent) => {
     if (!isRecordingHotkey) return;
     e.preventDefault();
 
-    // Ignore isolated modifier keys to allow building combinations
-    if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+    const pressedParts = sortShortcutParts([
+      ...(e.ctrlKey ? ['Control'] : []),
+      ...(e.altKey ? ['Alt'] : []),
+      ...(e.shiftKey ? ['Shift'] : []),
+      ...(e.metaKey ? ['Super'] : []),
+    ]);
+    const normalizedKey = normalizeKeyName(e.key);
 
-    const modifiers = [];
-    if (e.metaKey) modifiers.push('Super');
-    if (e.ctrlKey) modifiers.push('Control');
-    if (e.altKey) modifiers.push('Alt');
-    if (e.shiftKey) modifiers.push('Shift');
-    
-    // Require at least 2 modifiers to prevent accidental Ctrl+V / Ctrl+C etc.
-    if (modifiers.length < 2) return;
+    if (isModifierKey(normalizedKey)) {
+      setCapturedKeys(pressedParts);
+      return;
+    }
 
-    // Add the primary key
-    let mainKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-    if (mainKey === ' ') mainKey = 'Space';
-    
-    modifiers.push(mainKey);
-    const newHotkey = modifiers.join('+');
-    
-    // Save to store and sync with Rust backend
-    setHotkey(newHotkey);
-    invoke('update_hotkey', { newHotkey }).catch(err => {
-      console.warn('Could not register hotkey:', err);
-    });
-    setIsRecordingHotkey(false);
+    saveHotkey([...pressedParts, normalizedKey]);
+  };
+
+  const handleHotkeyRelease = (e: React.KeyboardEvent) => {
+    if (!isRecordingHotkey) return;
+
+    const normalizedKey = normalizeKeyName(e.key);
+    if (!isModifierKey(normalizedKey)) return;
+
+    const nextCaptured = capturedKeys.filter((key) => key !== normalizedKey);
+    if (capturedKeys.length >= 2) {
+      saveHotkey(capturedKeys);
+      return;
+    }
+
+    setCapturedKeys(nextCaptured);
   };
 
   const resetHotkey = () => {
     setHotkey(DEFAULT_HOTKEY);
+    setCapturedKeys([]);
     invoke('update_hotkey', { newHotkey: DEFAULT_HOTKEY }).catch(err => {
       console.warn('Could not reset hotkey:', err);
     });
+  };
+
+  const handleCheckForUpdates = async () => {
+    setUpdateStatus('checking');
+    setUpdateError('');
+
+    try {
+      const result = await checkForGitHubUpdate();
+      setUpdateInfo(result);
+      setUpdateStatus(result.hasUpdate ? 'available' : 'current');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to check for updates right now.';
+      setUpdateError(message);
+      setUpdateStatus('error');
+    }
+  };
+
+  const openReleasePage = async (url = updateInfo?.htmlUrl || RELEASES_PAGE_URL) => {
+    try {
+      await openUrl(url);
+    } catch (error) {
+      console.warn('Could not open releases page:', error);
+      setUpdateError('Could not open the releases page.');
+      setUpdateStatus('error');
+    }
   };
 
   const SettingSection = ({ title, description, children }: any) => (
@@ -370,16 +499,27 @@ function SettingsTab() {
       <div className="space-y-6">
         <SettingSection 
           title="Dictation Hotkey" 
-          description="Click the input box and press your desired key combination."
+          description="Click the input box and press your desired key combination. Modifier-only shortcuts like Ctrl + Win are supported."
         >
           <div className="flex gap-3">
             <input 
               type="text" 
               readOnly
-              value={isRecordingHotkey ? "Press 2+ modifiers + key..." : hotkey}
-              onFocus={() => setIsRecordingHotkey(true)}
-              onBlur={() => setIsRecordingHotkey(false)}
+              value={
+                isRecordingHotkey
+                  ? (capturedKeys.length > 0 ? formatHotkeyLabel(capturedKeys.join('+')) : 'Press shortcut...')
+                  : formatHotkeyLabel(hotkey)
+              }
+              onFocus={() => {
+                setCapturedKeys([]);
+                setIsRecordingHotkey(true);
+              }}
+              onBlur={() => {
+                setCapturedKeys([]);
+                setIsRecordingHotkey(false);
+              }}
               onKeyDown={handleHotkeyRecord}
+              onKeyUp={handleHotkeyRelease}
               className={`flex-1 bg-black/40 border rounded-2xl px-5 py-4 text-[15px] text-zinc-200 focus:outline-none transition-colors font-mono tracking-wider cursor-pointer text-center
                 ${isRecordingHotkey ? "border-indigo-500" : "border-white/10 focus:border-indigo-500/50"}`}
             />
@@ -390,7 +530,73 @@ function SettingsTab() {
               Reset
             </button>
           </div>
-          <p className="text-xs text-zinc-600 mt-3">Requires at least 2 modifier keys (e.g. Ctrl+Shift) plus a key.</p>
+          <p className="text-xs text-zinc-600 mt-3">Requires at least two keys. Default: Ctrl + Win.</p>
+        </SettingSection>
+
+        <SettingSection
+          title="App Updates"
+          description="Check GitHub for the latest VoxDrop release and jump straight to the installer page when a newer build is available."
+        >
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleCheckForUpdates}
+                disabled={updateStatus === 'checking'}
+                className="px-6 py-3 rounded-2xl bg-white/5 text-white hover:bg-white/10 border border-white/10 text-sm font-bold tracking-wide transition-colors disabled:opacity-60 flex items-center gap-2"
+              >
+                {updateStatus === 'checking' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
+              </button>
+
+              <button
+                onClick={() => openReleasePage()}
+                className="px-6 py-3 rounded-2xl border border-indigo-500/30 text-sm font-bold text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+              >
+                Open Releases
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/5 bg-black/30 px-5 py-4">
+              <p className="text-sm text-zinc-300">
+                Installed version: <span className="text-white font-semibold">{updateInfo?.currentVersion ?? 'Unknown'}</span>
+              </p>
+
+              {updateStatus === 'idle' && (
+                <p className="text-sm text-zinc-500 mt-2">Manual checks compare your installed app version with the latest GitHub release.</p>
+              )}
+
+              {updateStatus === 'current' && updateInfo && (
+                <p className="text-sm text-emerald-300 mt-2">
+                  You are up to date. Latest release: {updateInfo.latestVersion ?? updateInfo.currentVersion}.
+                </p>
+              )}
+
+              {updateStatus === 'available' && updateInfo && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm text-amber-300">
+                    New version available: {updateInfo.latestVersion}.
+                  </p>
+                  {updateInfo.publishedAt && (
+                    <p className="text-xs text-zinc-500">
+                      Published {new Date(updateInfo.publishedAt).toLocaleDateString()}.
+                    </p>
+                  )}
+                  <button
+                    onClick={() => openReleasePage(updateInfo.htmlUrl)}
+                    className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold tracking-wide hover:bg-emerald-500/20 transition-colors"
+                  >
+                    Download Latest Release
+                  </button>
+                </div>
+              )}
+
+              {updateStatus === 'error' && (
+                <p className="text-sm text-rose-300 mt-2">
+                  {updateError || 'Unable to check for updates right now.'}
+                </p>
+              )}
+            </div>
+          </div>
         </SettingSection>
 
         <SettingSection 
