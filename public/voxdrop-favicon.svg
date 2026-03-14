@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="32" fill="#09111f"/>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#tile)"/>
+  <path d="M64 26C42.46 26 25 43.46 25 65C25 86.54 42.46 104 64 104C85.54 104 103 86.54 103 65" stroke="url(#ring)" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="64" cy="65" r="14" fill="url(#core)"/>
+  <path d="M45 65C45 54.5066 53.5066 46 64 46C74.4934 46 83 54.5066 83 65" stroke="url(#wave)" stroke-width="7" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="tile" x1="10" y1="10" x2="118" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#111c35"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="25" y1="26" x2="103" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a5b4fc"/>
+      <stop offset="1" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="core" x1="50" y1="51" x2="78" y2="79" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="45" y1="65" x2="83" y2="65" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+</svg>

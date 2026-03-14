@@ -2,127 +2,192 @@
   <img src="./docs/assets/voxdrop-banner.svg" alt="VoxDrop banner" width="100%" />
 </p>
 
-<h1 align="center">✨ VoxDrop ✨</h1>
+<h1 align="center">VoxDrop</h1>
 
 <p align="center">
-  <em>Speak naturally. Let AI do the typing.</em><br/>
-  <strong>Hotkey-powered desktop dictation that captures your voice, cleans it up with Groq AI, expands your shortcuts, and seamlessly pastes polished text into any app you're using.</strong>
+  Desktop dictation for Windows with a global hotkey, a floating listening pill, Groq-powered transcription, smart text cleanup, and snippet expansion.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Kutral/VoxDrop/releases">
-    <img src="https://img.shields.io/github/v/release/Kutral/VoxDrop?style=for-the-badge&color=ff69b4" alt="GitHub release" />
-  </a>
-  <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-0b1220?style=for-the-badge" alt="MIT license" />
-  </a>
+  <a href="https://github.com/Kutral/VoxDrop/releases"><img src="https://img.shields.io/github/v/release/Kutral/VoxDrop?style=for-the-badge&label=Latest%20Release" alt="Latest release" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-0b1220?style=for-the-badge" alt="MIT license" /></a>
 </p>
 
----
+## Overview
 
-## ⚡ Why VoxDrop?
+VoxDrop lets you hold a hotkey, speak, release, and have polished text pasted directly into the app you are currently using. It is designed for fast desktop-first writing, short-form replies, repetitive text entry, and voice-driven workflows.
 
-We've all been there: your brain is moving a million miles a minute, but your fingers can't keep up. **VoxDrop is built for the moment when typing is slower than thinking.** 
+Core flow:
 
-Hold a single global shortcut, speak your mind naturally, and release. VoxDrop works in the background to transcribe, reformat, and instantly paste the perfect text into your active window. Perfect for emails, coding, creative writing, or just saving time!
+1. Hold the dictation hotkey.
+2. Speak naturally.
+3. Release the keys.
+4. VoxDrop records audio, transcribes it with Groq Whisper, cleans it with a Groq Llama model, expands snippets, and pastes the result at your cursor.
 
----
+## Main Features
 
-## 🌟 Magic Features
+- Global hotkey dictation
+- Floating listening pill above the taskbar
+- Groq Whisper transcription
+- Groq Llama text cleanup
+- Snippet expansion before paste
+- Local settings and activity history
+- Desktop build support through Tauri
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3>🎙️ Instant Dictation</h3>
-      <p>Hold your global shortcut anywhere on your PC. A sleek, unobtrusive "listening pill" pops up. Speak, release, and watch the text appear.</p>
-    </td>
-    <td width="50%">
-      <h3>🧠 AI-Powered Polish</h3>
-      <p>Powered by <strong>Groq Whisper</strong> for lightning-fast transcription and <strong>Groq Llama</strong> to clean up "ums," "ahs," and formatting without changing your tone.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>✂️ Smart Snippets</h3>
-      <p>Speak a trigger phrase (like "my-email") and VoxDrop automatically expands it into your full email address or canned response before pasting.</p>
-    </td>
-    <td width="50%">
-      <h3>🎯 Native Integration</h3>
-      <p>No more copying and pasting from a separate app. VoxDrop injects the final polished text directly into whichever application currently has your focus.</p>
-    </td>
-  </tr>
-</table>
+## How to Open the App
 
----
+### Option 1: Development mode
 
-## 🚀 Get Started in Seconds
+Use this while actively working on the app.
 
-### 🎁 Option 1: Just Give Me The App! (Recommended)
-Want to start talking right away?
-1. Head over to our **[Releases Page](https://github.com/Kutral/VoxDrop/releases)**.
-2. Download the latest `.exe` installer.
-3. Run it, log in with your Groq API key, and you are ready to roll!
+Open a terminal in the project folder:
 
-### 🛠️ Option 2: I Want to Tinker (Developers)
-Love looking under the hood? 
-```bash
-# Clone the magic
-git clone https://github.com/Kutral/VoxDrop.git
-cd VoxDrop
-
-# Install dependencies
+```powershell
+cd D:\Projects\Voxdrop
 npm install
-
-# Launch in dev mode (Live Reload enabled!)
 npm run tauri dev
 ```
 
----
+This runs VoxDrop in live-reload mode, so code changes appear immediately.
 
-## 🎮 How to Use VoxDrop
+### Option 2: Permanent installation
 
-### The Golden Rule: Hold to Speak
-1. **Hold** `Ctrl + Shift + Space` (Default).
-2. **Speak** your thoughts.
-3. **Release** the keys. *Boom. Text pasted.*
+Build the app once to generate an installer:
 
-### ⚙️ Make It Yours
-Don't like the default hotkey? No problem.
-- Open the VoxDrop dashboard.
-- Head to **Settings**.
-- Click the hotkey input and press your favorite combo (e.g., `Ctrl + Alt + V`). *Note: Requires at least 2 modifier keys to keep your typing safe from accidental triggers!*
+```powershell
+npm run tauri build
+```
 
-### 🪄 Snippets (Your Secret Weapon)
-Stop typing the same things over and over.
-- Go to the **Snippets** tab.
-- Add a **Trigger**: `brb`
-- Add an **Expansion**: `I'll be right back, just grabbing a coffee!`
-- Next time you dictate "brb", VoxDrop does the heavy lifting.
+After the build finishes, the Windows installer will be generated under:
 
-*(Pro Tip: If your settings ever feel "stuck", just open the app, press `F12` for DevTools, go to Application -> Local Storage, clear it, and restart!)*
+```text
+src-tauri\target\release\bundle\msi\
+```
 
----
+Run the generated installer to add VoxDrop to the Start Menu and create a normal desktop-installed app experience.
 
-## 🧩 The Tech Magic Behind the Curtain
+## How to Use the App
 
-Built with speed, aesthetics, and performance in mind:
+### Dictation hotkey
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Tauri-0f172a?style=for-the-badge&logo=tauri&logoColor=24c8db" alt="Tauri" />
-  <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
-  <img src="https://img.shields.io/badge/React_19-111827?style=for-the-badge&logo=react&logoColor=61dafb" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Vite-1f2937?style=for-the-badge&logo=vite&logoColor=ffd62e" alt="Vite" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
-  <img src="https://img.shields.io/badge/Groq_AI-111827?style=for-the-badge&logo=openai&logoColor=white" alt="Groq" />
-</p>
+Default hotkey:
 
----
+```text
+Ctrl + Shift + Space
+```
 
-<p align="center">
-  <br/>
-  Made with ❤️ by <strong>Kutral Eswar</strong>
-  <br/>
-  <br/>
-  <em>Open source and free forever. Contributions welcome!</em>
-</p>
+Usage:
+
+1. Hold the hotkey to start recording.
+2. Speak while the listening pill is visible.
+3. Release the keys to stop recording.
+4. VoxDrop will transcribe, clean, and paste the text automatically.
+
+### Change the hotkey
+
+1. Open the main VoxDrop window.
+2. Go to `Settings`.
+3. Find `Dictation Hotkey`.
+4. Click the input box.
+5. Press the new key combination you want to use.
+
+Note:
+
+- The app requires at least two modifier keys such as `Ctrl`, `Shift`, or `Alt` to reduce accidental conflicts with common shortcuts.
+
+### Snippets
+
+Snippets let you replace spoken trigger phrases with longer saved text.
+
+Example:
+
+- Trigger phrase: `my-email`
+- Expansion: `hello@example.com`
+
+How to add one:
+
+1. Open the `Snippets` tab.
+2. Enter a trigger phrase.
+3. Enter the expansion text.
+4. Save it.
+
+The next time you dictate that trigger phrase, VoxDrop replaces it before pasting the final result.
+
+### If old hotkey settings feel stuck
+
+If you still see older stored settings, clear the app's local storage and restart the app.
+
+Suggested recovery flow:
+
+1. Open DevTools with `F12`.
+2. Go to `Application`.
+3. Open `Local Storage`.
+4. Clear the stored VoxDrop data.
+5. Restart the app.
+
+## API Setup
+
+VoxDrop currently uses Groq for both transcription and cleanup.
+
+You can provide the API key in either of these ways:
+
+### Option 1: Set it in the app
+
+1. Open `Settings`.
+2. Paste your Groq API key into `Neural API Key`.
+3. Click `Authenticate`.
+
+### Option 2: Preload it with an env file
+
+Create a local env file:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Then set:
+
+```env
+VITE_GROQ_API_KEY=your_groq_api_key_here
+```
+
+## Local Development
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the desktop app:
+
+```powershell
+npm run tauri dev
+```
+
+Build the production app:
+
+```powershell
+npm run tauri build
+```
+
+## Requirements
+
+- Node.js
+- npm
+- Rust stable toolchain
+- Tauri prerequisites for Windows
+- Microsoft C++ Build Tools
+- WebView2 Runtime
+
+Official setup guide:
+
+- [Tauri prerequisites](https://tauri.app/start/prerequisites/)
+
+## Project Docs
+
+Detailed project structure and directory documentation live in [project.md](./project.md).
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
