@@ -127,6 +127,9 @@ pub fn run() {
             update_hotkey,
             audio::start_recording,
             audio::stop_recording,
+            audio::get_audio_level,
+            audio::mute_system,
+            audio::unmute_system,
             paste::paste_text
         ]);
 
