@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./docs/assets/dashboard-v0.0.4.png" alt="VoxDrop Dashboard" width="100%" />
-</p>
-
 <h1 align="center">🎙️ VoxDrop</h1>
 
 <p align="center">
@@ -18,6 +14,10 @@
 </p>
 
 <hr/>
+
+<p align="center">
+  <img src="./docs/assets/dashboard-v0.0.4.png" alt="VoxDrop Dashboard" width="100%" />
+</p>
 
 ## ✨ Why VoxDrop?
 
@@ -133,7 +133,7 @@ Read the detailed [Project Documentation](./project.md) to learn more about the 
 
 ## 📜 License
 
-This project is open-source and available under the [MIT License](./LICENSE).
+Project is open-source and available under the [MIT License](./LICENSE).
 
 <p align="center">
   <i>Built with ❤️ for faster workflows.</i>
