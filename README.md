@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/assets/voxdrop-banner.svg" alt="VoxDrop banner" width="100%" />
+  <img src="./docs/assets/dashboard-v0.0.4.png" alt="VoxDrop Dashboard" width="100%" />
 </p>
 
 <h1 align="center">🎙️ VoxDrop</h1>
