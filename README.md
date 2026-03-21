@@ -23,6 +23,8 @@
 
 VoxDrop is designed for **fast desktop-first writing, short-form replies, repetitive text entry, and voice-driven workflows.** It bypasses the need for typing out long thoughts, giving you a seamless bridge between your voice and your active application.
 
+Unlike heavy Electron-based alternatives, VoxDrop is built with Rust and Tauri, meaning it is **ultra-lightweight—using only ~3.4 MB of RAM** while idling in your background.
+
 Hold a hotkey, speak your mind, release, and watch as perfectly polished text is magically pasted exactly where your cursor is.
 
 ## 🚀 Core Flow
@@ -35,6 +37,7 @@ Hold a hotkey, speak your mind, release, and watch as perfectly polished text is
 ## 🌟 Features
 
 - **⚡ Global Hotkey Dictation:** Start dictating from *any* application.
+- **🚀 Ultra-Lightweight:** Native Rust core that sips resources, using **only 3.4 MB of RAM**.
 - **📊 Personalized Dashboard:** Real-time metrics for your weekly streak, average dictation speed (WPM), and total words dictated.
 - **💊 Floating Listening Pill:** A beautiful, non-intrusive UI element that appears above your taskbar only when listening.
 - **🎵 Native Media Control:** Automatically pauses background music (Spotify, YouTube, etc.) via Windows kernel APIs while you dictate.
