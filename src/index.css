@@ -6,32 +6,22 @@
 
 @layer base {
   body {
-    @apply bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden;
+    @apply bg-[#F9FAFB] text-gray-900 font-sans antialiased overflow-hidden;
     user-select: none;
   }
 
   ::selection {
-    @apply bg-indigo-500/30 text-indigo-100;
+    @apply bg-indigo-500/20 text-indigo-900;
   }
 }
 
 @layer utilities {
-  .noise-bg {
-    background-image:
-      radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px),
-      radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px),
-      radial-gradient(circle at 40% 70%, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px);
-    background-size: 18px 18px, 24px 24px, 28px 28px;
-    opacity: 0.3;
-    pointer-events: none;
-  }
-  
   .glass-panel {
-    @apply bg-white/[0.02] border border-white/[0.05] backdrop-blur-xl shadow-2xl;
+    @apply bg-white/70 border border-white/40 backdrop-blur-xl shadow-xl;
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-zinc-100 to-zinc-500;
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-gray-900 to-gray-500;
   }
 }
 
@@ -52,9 +42,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-800 rounded-full border-[1px] border-zinc-900;
+  @apply bg-gray-200 rounded-full border-[1px] border-gray-100;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-zinc-700;
+  @apply bg-gray-300;
 }
+

@@ -181,7 +181,11 @@ export function PillView() {
 
       if (cancelled) return;
 
+      let recordingStartTime = 0;
+
       unlistenDown = await listen('shortcut-down', async () => {
+        if (pillStateRef.current === 'listening') return; // Prevent key repeat from resetting the timer
+        
         const apiKey = useAppStore.getState().apiKey;
 
         if (!apiKey) {
@@ -195,6 +199,7 @@ export function PillView() {
 
         setPillState('listening');
         setStatusMsg('Listening...');
+        recordingStartTime = Date.now();
 
         try {
           await invoke('start_recording');
@@ -210,6 +215,10 @@ export function PillView() {
 
       unlistenUp = await listen('shortcut-up', async () => {
         if (pillStateRef.current !== 'listening') return;
+
+        const rawDuration = recordingStartTime > 0 ? (Date.now() - recordingStartTime) / 1000 : 0;
+        // Enforce a minimum of 0.5 seconds so extremely short dictations don't evaluate to 0
+        const recordingDurationSeconds = Math.max(rawDuration, 0.5);
 
         setPillState('processing');
         setStatusMsg('Transcribing...');
@@ -246,7 +255,7 @@ export function PillView() {
           const historyItem = {
             id: Date.now(),
             transcript: cleanText,
-            duration_seconds: 0,
+            duration_seconds: recordingDurationSeconds,
             created_at: new Date().toISOString(),
           };
 
@@ -286,17 +295,17 @@ export function PillView() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: 'spring', damping: 25, stiffness: 400 }}
-          className="w-full h-full bg-[#09090b]/90 backdrop-blur-md flex items-center px-4 gap-3 relative overflow-hidden rounded-full shadow-[0_0_40px_rgba(99,102,241,0.15)]"
+          className="w-full h-full bg-white/95 backdrop-blur-md flex items-center px-4 gap-3 relative overflow-hidden rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]"
           style={{ height: '48px', borderRadius: '24px' }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-violet-500/5 to-fuchsia-500/5 rounded-full pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/50 via-violet-50/50 to-fuchsia-50/50 rounded-full pointer-events-none" />
 
           <div className="relative z-10 flex items-center w-full gap-3">
             <div
-              className={`flex items-center justify-center shrink-0 border shadow-inner ${
+              className={`flex items-center justify-center shrink-0 border ${
                 pillState === 'listening'
-                  ? 'h-10 min-w-[78px] rounded-full px-3 border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_55%),linear-gradient(135deg,rgba(244,63,94,0.2),rgba(251,146,60,0.12))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_30px_rgba(244,63,94,0.16)]'
-                  : 'w-10 h-10 rounded-full bg-white/5 border-white/5'
+                  ? 'h-10 min-w-[78px] rounded-full px-3 border-rose-100 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.8),transparent_55%),linear-gradient(135deg,rgba(244,63,94,0.05),rgba(251,146,60,0.05))] shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_4px_12px_rgba(244,63,94,0.1)]'
+                  : 'w-10 h-10 rounded-full bg-gray-50 border-gray-100 shadow-sm'
               }`}
             >
               {pillState === 'listening' && (
@@ -304,7 +313,7 @@ export function PillView() {
                   <motion.div
                     animate={{ opacity: [0.5, 1, 0.5], scale: [0.94, 1, 0.94] }}
                     transition={{ repeat: Infinity, duration: 1.25, ease: 'easeInOut' }}
-                    className="w-2 h-2 rounded-full bg-rose-300 shadow-[0_0_12px_rgba(253,164,175,0.95)] shrink-0"
+                    className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0"
                   />
 
                   <div className="flex items-center gap-[2px] h-6 flex-1">
@@ -313,7 +322,7 @@ export function PillView() {
                         key={index}
                         animate={{ height: `${height}px`, opacity: 0.48 + (height / MAX_BAR_HEIGHT) * 0.52 }}
                         transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
-                        className="w-[2px] rounded-full bg-gradient-to-t from-rose-500 via-rose-300 to-amber-100 shadow-[0_0_10px_rgba(251,113,133,0.35)]"
+                        className="w-[2px] rounded-full bg-gradient-to-t from-rose-500 to-amber-400 shadow-sm"
                       />
                     ))}
                   </div>
@@ -327,17 +336,17 @@ export function PillView() {
                       key={i}
                       animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
                       transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                      className="w-2 h-2 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.6)]"
+                      className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
                     />
                   ))}
                 </div>
               )}
 
               {pillState === 'done' && (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 drop-shadow-sm" />
               )}
               {pillState === 'error' && (
-                <AlertTriangle className="w-5 h-5 text-rose-400 drop-shadow-[0_0_10px_rgba(251,113,133,0.5)]" />
+                <AlertTriangle className="w-5 h-5 text-rose-500 drop-shadow-sm" />
               )}
             </div>
 
@@ -348,7 +357,7 @@ export function PillView() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  className="block text-[15px] font-bold text-zinc-100 truncate tracking-wide"
+                  className="block text-[15px] font-bold text-gray-800 truncate tracking-wide"
                 >
                   {statusMsg}
                 </motion.span>

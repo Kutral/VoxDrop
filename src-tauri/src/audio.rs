@@ -185,67 +185,38 @@ pub fn get_audio_level(state: tauri::State<'_, Mutex<AudioState>>) -> Result<f32
 pub fn mute_system() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-
-        // Use AudioSes.dll via PowerShell to detect if any audio is actually playing
-        // This checks the peak meter value - if > 0, something is playing
-        let check = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                r#"
-                Add-Type -TypeDefinition @'
-                using System;
-                using System.Runtime.InteropServices;
-                [Guid("C1D58F9A-7D0D-4A8D-9E6F-3B8A1E9C4D5F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-                interface IAudioMeterInformation {
-                    float GetPeakValue();
-                }
-                [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-                class MMDeviceEnumerator { }
-                [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-                interface IMMDevice {
-                    void Activate(ref Guid iid, int clsctx, IntPtr params, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
-                }
-                [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-                interface IMMDeviceEnumerator {
-                    void GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
-                }
-'@
-                try {
-                    $iid = [Guid]"C1D58F9A-7D0D-4A8D-9E6F-3B8A1E9C4D5F"
-                    $e = [MMDeviceEnumerator]::new() -as [IMMDeviceEnumerator]
-                    $e.GetDefaultAudioEndpoint(0, 0, [ref]$dev)
-                    $dev.Activate([ref]$iid, 0x17, [IntPtr]::Zero, [ref]$meter)
-                    $peak = ($meter -as [IAudioMeterInformation]).GetPeakValue()
-                    if ($peak -gt 0.01) { "playing" } else { "silent" }
-                } catch { "silent" }
-                "#,
-            ])
-            .output();
-
-        let has_audio = match check {
-            Ok(o) if o.status.success() => {
-                let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                eprintln!("[audio] Audio meter check: {}", stdout);
-                stdout == "playing"
-            }
-            _ => false,
+        use windows::Media::Control::{
+            GlobalSystemMediaTransportControlsSessionManager,
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus,
         };
 
-        if has_audio {
-            eprintln!("[audio] Background audio detected — muting");
-            let _ = Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    "$c = New-Object -ComObject WScript.Shell; $c.SendKeys([char]173)",
-                ])
-                .output();
+        eprintln!("[audio] Checking media playback state natively (WinRT)...");
+
+        let mut was_playing = false;
+
+        // Safely run WinRT COM logic
+        let _ = (|| -> Result<(), windows::core::Error> {
+            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
+            
+            if let Ok(session) = manager.GetCurrentSession() {
+                if let Ok(info) = session.GetPlaybackInfo() {
+                    if let Ok(status) = info.PlaybackStatus() {
+                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                            eprintln!("[audio] Active media detected. Pausing...");
+                            was_playing = true;
+                            let _ = session.TryTogglePlayPauseAsync()?.get();
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })();
+
+        if was_playing {
             return Ok(true);
         }
 
-        eprintln!("[audio] No background audio — skipping mute");
+        eprintln!("[audio] No active media detected — skipping pause");
         return Ok(false);
     }
 
@@ -261,15 +232,15 @@ pub fn unmute_system(did_mute: bool) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        eprintln!("[audio] Restoring audio");
-        let _ = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
-            ])
-            .output();
+        eprintln!("[audio] Resuming media natively (WinRT SMTC)");
+        use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
+        let _ = (|| -> Result<(), windows::core::Error> {
+            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
+            if let Ok(session) = manager.GetCurrentSession() {
+                session.TryTogglePlayPauseAsync()?.get()?;
+            }
+            Ok(())
+        })();
     }
 
     Ok(())
