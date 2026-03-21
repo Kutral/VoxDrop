@@ -27,7 +27,7 @@ Hold a hotkey, speak your mind, release, and watch as perfectly polished text is
 
 ## 🚀 Core Flow
 
-1. **Hold** your custom dictation hotkey (default: `Ctrl + Shift + Space`).
+1. **Hold** your custom dictation hotkey (default: `Ctrl + Win`).
 2. **Speak** naturally while the unobtrusive floating pill listens.
 3. **Release** the keys.
 4. **Magic happens:** VoxDrop records the audio, transcribes it instantly with Groq Whisper, polishes it with a Groq Llama model, expands any snippets, and pastes the final text directly into your active window.
@@ -35,10 +35,12 @@ Hold a hotkey, speak your mind, release, and watch as perfectly polished text is
 ## 🌟 Features
 
 - **⚡ Global Hotkey Dictation:** Start dictating from *any* application.
+- **📊 Personalized Dashboard:** Real-time metrics for your weekly streak, average dictation speed (WPM), and total words dictated.
 - **💊 Floating Listening Pill:** A beautiful, non-intrusive UI element that appears above your taskbar only when listening.
+- **🎵 Native Media Control:** Automatically pauses background music (Spotify, YouTube, etc.) via Windows kernel APIs while you dictate.
 - **🧠 Groq Whisper Transcription:** Industry-leading, ultra-fast speech-to-text.
 - **✨ Smart Text Cleanup:** Uses Groq Llama models to fix punctuation, grammar, and formatting automatically.
-- **✂️ Snippet Expansion:** Create voice macros! Say a trigger phrase (like `my-email`) and VoxDrop pastes the expansion (`hello@example.com`).
+- **✂️ Snippet Expansion:** Create voice macros! Say a trigger phrase (like `my-link`) and VoxDrop pastes the expansion (`https://github.com/Kutral`).
 - **⚙️ Local Settings & History:** Everything is stored locally on your machine for privacy and speed.
 - **💻 Desktop Native:** Built with Tauri & Rust for a lightweight footprint and native Windows hooks.
 
@@ -56,7 +58,7 @@ Hold a hotkey, speak your mind, release, and watch as perfectly polished text is
 
 1. Ensure VoxDrop is running in the background.
 2. Click into any text field in any app (Word, Chrome, Discord, etc.).
-3. Hold `Ctrl + Shift + Space`.
+3. Hold `Ctrl + Win`.
 4. Speak your message.
 5. Release the keys. Your text will be instantly pasted!
 
@@ -74,8 +76,6 @@ VoxDrop relies on Groq for its blazing-fast transcription and cleanup models. Yo
 2. Open the VoxDrop app window.
 3. Navigate to **Settings**.
 4. Paste your key into the **Neural API Key** field and click **Authenticate**.
-
-*(Alternatively, you can set a `VITE_GROQ_API_KEY` environment variable in a `.env.local` file).*
 
 ### 📝 Using Snippets
 
