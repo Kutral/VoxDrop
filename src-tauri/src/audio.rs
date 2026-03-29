@@ -2,6 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
 use hound::{WavSpec, WavWriter};
 use std::io::Cursor;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub struct StreamWrapper(pub cpal::Stream);
@@ -10,18 +11,20 @@ unsafe impl Sync for StreamWrapper {}
 
 pub struct AudioState {
     pub stream: Option<StreamWrapper>,
-    pub wav_data: Arc<Mutex<Option<Vec<i16>>>>,
+    pub wav_data: Arc<Mutex<Vec<i16>>>,
     pub spec: Option<WavSpec>,
     pub rms_level: Arc<Mutex<f32>>,
+    pub is_recording: Arc<AtomicBool>,
 }
 
 impl Default for AudioState {
     fn default() -> Self {
         Self {
             stream: None,
-            wav_data: Arc::new(Mutex::new(None)),
+            wav_data: Arc::new(Mutex::new(Vec::new())),
             spec: None,
             rms_level: Arc::new(Mutex::new(0.0)),
+            is_recording: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -40,24 +43,16 @@ fn compute_rms(samples: &[i16]) -> f32 {
     (sum_sq / samples.len() as f64).sqrt() as f32
 }
 
-#[tauri::command]
-pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(), String> {
+pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
         .ok_or("Failed to get default input device")?;
 
     let device_name = device.name().unwrap_or_else(|_| "unknown".into());
-    eprintln!("[audio] Input device: {}", device_name);
+    eprintln!("[audio] Pre-warming input device: {}", device_name);
 
     let config = device.default_input_config().map_err(|e| e.to_string())?;
-    eprintln!(
-        "[audio] Format: {:?}, Rate: {}, Channels: {}",
-        config.sample_format(),
-        config.sample_rate().0,
-        config.channels()
-    );
-
     let sample_rate = config.sample_rate().0;
     let channels = config.channels();
 
@@ -68,11 +63,11 @@ pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(),
         sample_format: hound::SampleFormat::Int,
     };
 
-    let wav_data = Arc::new(Mutex::new(Some(Vec::new())));
-    let wav_data_clone = wav_data.clone();
-
-    let rms_level: Arc<Mutex<f32>> = Arc::new(Mutex::new(0.0f32));
-    let rms_for_callback = Arc::clone(&rms_level);
+    let mut state_lock = state.lock().unwrap();
+    state_lock.spec = Some(spec);
+    let wav_data = state_lock.wav_data.clone();
+    let rms_level = state_lock.rms_level.clone();
+    let is_recording = state_lock.is_recording.clone();
 
     let err_fn = |err| eprintln!("[audio] Stream error: {}", err);
 
@@ -81,19 +76,22 @@ pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(),
             .build_input_stream(
                 &config.into(),
                 move |data: &[f32], _: &_| {
-                    // Store samples for WAV
-                    if let Ok(mut lock) = wav_data_clone.lock() {
-                        if let Some(vec) = lock.as_mut() {
-                            for &sample in data {
-                                vec.push((sample * i16::MAX as f32) as i16);
-                            }
+                    if !is_recording.load(Ordering::SeqCst) {
+                        if let Ok(mut level) = rms_level.lock() {
+                            *level = 0.0;
+                        }
+                        return;
+                    }
+                    
+                    if let Ok(mut lock) = wav_data.lock() {
+                        for &sample in data {
+                            lock.push((sample * i16::MAX as f32) as i16);
                         }
                     }
-                    // Compute RMS over the full buffer chunk
                     if !data.is_empty() {
                         let sum_sq: f32 = data.iter().map(|&s| s * s).sum();
                         let rms = (sum_sq / data.len() as f32).sqrt();
-                        if let Ok(mut level) = rms_for_callback.lock() {
+                        if let Ok(mut level) = rms_level.lock() {
                             *level = rms;
                         }
                     }
@@ -106,14 +104,19 @@ pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(),
             .build_input_stream(
                 &config.into(),
                 move |data: &[i16], _: &_| {
-                    if let Ok(mut lock) = wav_data_clone.lock() {
-                        if let Some(vec) = lock.as_mut() {
-                            vec.extend_from_slice(data);
+                    if !is_recording.load(Ordering::SeqCst) {
+                        if let Ok(mut level) = rms_level.lock() {
+                            *level = 0.0;
                         }
+                        return;
+                    }
+
+                    if let Ok(mut lock) = wav_data.lock() {
+                        lock.extend_from_slice(data);
                     }
                     if !data.is_empty() {
                         let rms = compute_rms(data);
-                        if let Ok(mut level) = rms_for_callback.lock() {
+                        if let Ok(mut level) = rms_level.lock() {
                             *level = rms;
                         }
                     }
@@ -126,40 +129,46 @@ pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(),
     };
 
     stream.play().map_err(|e| e.to_string())?;
-    eprintln!("[audio] Stream started");
-
-    let mut state_lock = state.lock().unwrap();
     state_lock.stream = Some(StreamWrapper(stream));
-    state_lock.wav_data = wav_data;
-    state_lock.spec = Some(spec);
-    state_lock.rms_level = rms_level;
+    eprintln!("[audio] Stream pre-warmed and running");
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn stop_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<String, String> {
-    let mut state_lock = state.lock().unwrap();
+pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(), String> {
+    start_recording_internal(&state)
+}
 
-    if let Some(stream_wrapper) = state_lock.stream.take() {
-        drop(stream_wrapper.0);
-    } else {
-        return Err("No active recording".to_string());
+pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<(), String> {
+    let state_lock = state.lock().unwrap();
+    
+    // Clear previous data
+    if let Ok(mut data) = state_lock.wav_data.lock() {
+        data.clear();
     }
+    
+    state_lock.is_recording.store(true, Ordering::SeqCst);
+    eprintln!("[audio] Recording started (flag set)");
+    Ok(())
+}
 
-    if let Ok(mut level) = state_lock.rms_level.lock() {
+#[tauri::command]
+pub fn stop_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<String, String> {
+    let (wav_data, spec) = {
+        let state_lock = state.lock().unwrap();
+        state_lock.is_recording.store(false, Ordering::SeqCst);
+        
+        let data = state_lock.wav_data.lock().unwrap().clone();
+        let spec = state_lock.spec.ok_or("No audio spec found")?;
+        (data, spec)
+    };
+
+    if let Ok(mut level) = state.lock().unwrap().rms_level.lock() {
         *level = 0.0;
     }
 
-    let wav_data = state_lock
-        .wav_data
-        .lock()
-        .unwrap()
-        .take()
-        .unwrap_or_default();
-    let spec = state_lock.spec.take().unwrap();
-
-    eprintln!("[audio] Stream stopped, {} samples", wav_data.len());
+    eprintln!("[audio] Recording stopped, {} samples", wav_data.len());
 
     let mut cursor = Cursor::new(Vec::new());
     {
@@ -183,6 +192,10 @@ pub fn get_audio_level(state: tauri::State<'_, Mutex<AudioState>>) -> Result<f32
 
 #[tauri::command]
 pub fn mute_system() -> Result<bool, String> {
+    mute_system_internal()
+}
+
+pub fn mute_system_internal() -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         use windows::Media::Control::{
@@ -190,11 +203,8 @@ pub fn mute_system() -> Result<bool, String> {
             GlobalSystemMediaTransportControlsSessionPlaybackStatus,
         };
 
-        eprintln!("[audio] Checking media playback state natively (WinRT)...");
-
         let mut was_playing = false;
 
-        // Safely run WinRT COM logic
         let _ = (|| -> Result<(), windows::core::Error> {
             let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
             
@@ -202,7 +212,6 @@ pub fn mute_system() -> Result<bool, String> {
                 if let Ok(info) = session.GetPlaybackInfo() {
                     if let Ok(status) = info.PlaybackStatus() {
                         if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
-                            eprintln!("[audio] Active media detected. Pausing...");
                             was_playing = true;
                             let _ = session.TryTogglePlayPauseAsync()?.get();
                         }
@@ -212,12 +221,7 @@ pub fn mute_system() -> Result<bool, String> {
             Ok(())
         })();
 
-        if was_playing {
-            return Ok(true);
-        }
-
-        eprintln!("[audio] No active media detected — skipping pause");
-        return Ok(false);
+        return Ok(was_playing);
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -232,7 +236,6 @@ pub fn unmute_system(did_mute: bool) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        eprintln!("[audio] Resuming media natively (WinRT SMTC)");
         use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
         let _ = (|| -> Result<(), windows::core::Error> {
             let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;

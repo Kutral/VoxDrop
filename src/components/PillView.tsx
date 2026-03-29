@@ -164,6 +164,7 @@ export function PillView() {
   useEffect(() => {
     let unlistenDown: (() => void) | null = null;
     let unlistenUp: (() => void) | null = null;
+    let unlistenMute: (() => void) | null = null;
     let cancelled = false;
     let didMute = false;
 
@@ -183,6 +184,10 @@ export function PillView() {
 
       let recordingStartTime = 0;
 
+      unlistenMute = await listen<boolean>('audio-muted', (event) => {
+        didMute = event.payload;
+      });
+
       unlistenDown = await listen('shortcut-down', async () => {
         if (pillStateRef.current === 'listening') return; // Prevent key repeat from resetting the timer
         
@@ -201,16 +206,7 @@ export function PillView() {
         setStatusMsg('Listening...');
         recordingStartTime = Date.now();
 
-        try {
-          await invoke('start_recording');
-          didMute = await invoke<boolean>('mute_system');
-        } catch {
-          setPillState('error');
-          setStatusMsg('Mic error');
-          setTimeout(() => {
-            setPillState('hidden');
-          }, 3000);
-        }
+        // Recording and muting are now handled directly in Rust for speed.
       });
 
       unlistenUp = await listen('shortcut-up', async () => {
@@ -284,6 +280,7 @@ export function PillView() {
       cancelled = true;
       unlistenDown?.();
       unlistenUp?.();
+      unlistenMute?.();
     };
   }, []);
 

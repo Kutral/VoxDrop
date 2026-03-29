@@ -170,6 +170,10 @@ pub fn run() {
         update_hotkey(app.handle().clone(), DEFAULT_HOTKEY.to_string())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
+        // Pre-warm audio subsystem
+        let audio_state = app.state::<std::sync::Mutex<audio::AudioState>>();
+        audio::setup_audio(&audio_state).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+
         if let Some(window) = app.get_webview_window("pill") {
             let _ = window.hide();
             let _ = window.set_always_on_top(true);
@@ -186,6 +190,14 @@ pub fn run() {
         let app_handle3 = app.handle().clone();
         app.listen("shortcut-down", move |_event| {
             show_pill_window(&app_handle3);
+
+            // Immediate recording start and system mute in Rust
+            let audio_state = app_handle3.state::<std::sync::Mutex<audio::AudioState>>();
+            let _ = audio::start_recording_internal(&audio_state);
+            let did_mute = audio::mute_system_internal().unwrap_or(false);
+            
+            // Notify frontend about the mute state so it can unmute later
+            let _ = app_handle3.emit("audio-muted", did_mute);
         });
 
         // Relay history-update from pill window to all windows (JS emit only reaches Rust)
