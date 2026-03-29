@@ -108,6 +108,7 @@ VoxDrop/
 
 ## Recent Milestones
 
+- **v0.0.6 Release (March 2026)**: Completely rewrote the hotkey engine to support chorded non-modifier combinations (like `N+M`). Switched from clipboard pasting to direct keystroke simulation (`enigo`) to prevent Windows clipboard history pollution. Fixed a state-sync race condition in the Settings UI for reliable hotkey recording.
 - **Performance Optimization (March 2026)**: Drastically reduced hotkey latency by moving audio recording start and system muting to the Rust backend. Implemented persistent audio stream pre-warming to achieve <50ms response time.
 - **V0.0.4 Release**: Initial project structure with Groq integration and Windows-first support.
 
