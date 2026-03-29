@@ -1,5 +1,6 @@
 #[cfg(target_os = "windows")]
 mod imp {
+    use std::collections::HashSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Mutex, OnceLock};
 
@@ -34,20 +35,61 @@ mod imp {
         alt_down: AtomicBool,
         shift_down: AtomicBool,
         super_down: AtomicBool,
+        main_keys_down: Mutex<HashSet<u16>>,
     }
 
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Default)]
     struct ModifierHotkey {
         ctrl: bool,
         alt: bool,
         shift: bool,
         super_key: bool,
+        vk_codes: HashSet<u16>,
+    }
+
+    fn parse_vk(name: &str) -> Option<u16> {
+        let name = name.to_ascii_uppercase();
+        if name.len() == 1 {
+            let c = name.chars().next().unwrap();
+            if c >= 'A' && c <= 'Z' {
+                return Some(c as u16);
+            }
+            if c >= '0' && c <= '9' {
+                return Some(c as u16);
+            }
+        }
+        
+        match name.as_str() {
+            "SPACE" => Some(0x20),
+            "ENTER" => Some(0x0D),
+            "TAB" => Some(0x09),
+            "ESCAPE" | "ESC" => Some(0x1B),
+            "DELETE" | "DEL" => Some(0x2E),
+            "BACKSPACE" => Some(0x08),
+            "UP" => Some(0x26),
+            "DOWN" => Some(0x28),
+            "LEFT" => Some(0x25),
+            "RIGHT" => Some(0x27),
+            "F1" => Some(0x70),
+            "F2" => Some(0x71),
+            "F3" => Some(0x72),
+            "F4" => Some(0x73),
+            "F5" => Some(0x74),
+            "F6" => Some(0x75),
+            "F7" => Some(0x76),
+            "F8" => Some(0x77),
+            "F9" => Some(0x78),
+            "F10" => Some(0x79),
+            "F11" => Some(0x7A),
+            "F12" => Some(0x7B),
+            _ => None,
+        }
     }
 
     impl ModifierHotkey {
         fn parse(value: &str) -> Option<Self> {
             let mut hotkey = Self::default();
-            let mut parts = 0;
+            let mut parts_count = 0;
 
             for raw_part in value.split('+') {
                 let part = raw_part.trim().to_ascii_lowercase();
@@ -59,25 +101,37 @@ mod imp {
                     "control" | "ctrl" => hotkey.ctrl = true,
                     "alt" | "option" => hotkey.alt = true,
                     "shift" => hotkey.shift = true,
-                    "super" | "meta" | "command" | "cmd" => hotkey.super_key = true,
-                    _ => return None,
+                    "super" | "meta" | "command" | "cmd" | "win" => hotkey.super_key = true,
+                    other => {
+                        if let Some(vk) = parse_vk(other) {
+                            hotkey.vk_codes.insert(vk);
+                        } else {
+                            return None;
+                        }
+                    }
                 }
-
-                parts += 1;
+                parts_count += 1;
             }
 
-            if parts >= 2 {
+            if parts_count >= 2 {
                 Some(hotkey)
             } else {
                 None
             }
         }
 
-        fn matches(self, state: &SharedState) -> bool {
-            self.ctrl == state.ctrl_down.load(Ordering::SeqCst)
+        fn matches(&self, state: &SharedState) -> bool {
+            let modifiers_match = self.ctrl == state.ctrl_down.load(Ordering::SeqCst)
                 && self.alt == state.alt_down.load(Ordering::SeqCst)
                 && self.shift == state.shift_down.load(Ordering::SeqCst)
-                && self.super_key == state.super_down.load(Ordering::SeqCst)
+                && self.super_key == state.super_down.load(Ordering::SeqCst);
+
+            let main_keys_match = {
+                let down = state.main_keys_down.lock().unwrap();
+                *down == self.vk_codes
+            };
+
+            modifiers_match && main_keys_match
         }
     }
 
@@ -90,6 +144,7 @@ mod imp {
             alt_down: AtomicBool::new(false),
             shift_down: AtomicBool::new(false),
             super_down: AtomicBool::new(false),
+            main_keys_down: Mutex::new(HashSet::new()),
         });
 
         std::thread::spawn(move || unsafe {
@@ -127,8 +182,11 @@ mod imp {
                 let is_key_up = matches!(wparam as u32, WM_KEYUP | WM_SYSKEYUP);
 
                 if is_key_down || is_key_up {
+                    let vk = event.vkCode as u16;
                     let is_pressed = is_key_down;
-                    match event.vkCode as u16 {
+
+                    let mut is_modifier = true;
+                    match vk {
                         VK_CONTROL | VK_LCONTROL | VK_RCONTROL => {
                             state.ctrl_down.store(is_pressed, Ordering::SeqCst);
                         }
@@ -141,7 +199,18 @@ mod imp {
                         VK_LWIN | VK_RWIN => {
                             state.super_down.store(is_pressed, Ordering::SeqCst);
                         }
-                        _ => {}
+                        _ => {
+                            is_modifier = false;
+                        }
+                    }
+
+                    if !is_modifier {
+                        let mut down = state.main_keys_down.lock().unwrap();
+                        if is_pressed {
+                            down.insert(vk);
+                        } else {
+                            down.remove(&vk);
+                        }
                     }
 
                     let configured_hotkey = state

@@ -5,6 +5,7 @@ use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+#[allow(dead_code)]
 pub struct StreamWrapper(pub cpal::Stream);
 unsafe impl Send for StreamWrapper {}
 unsafe impl Sync for StreamWrapper {}

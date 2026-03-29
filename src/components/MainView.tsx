@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { DEFAULT_HOTKEY, useAppStore } from '../store';
 import { testApiKey } from '../lib/groq';
 import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type ReleaseCheckResult } from '../lib/updates';
@@ -463,6 +463,7 @@ function SettingsTab() {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [capturedKeys, setCapturedKeys] = useState<string[]>([]);
+  const capturedKeysRef = useRef<string[]>([]);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'current' | 'error'>('idle');
   const [updateInfo, setUpdateInfo] = useState<ReleaseCheckResult | null>(null);
   const [updateError, setUpdateError] = useState('');
@@ -527,9 +528,9 @@ function SettingsTab() {
 
   const saveHotkey = (parts: string[]) => {
     const normalized = sortShortcutParts(parts);
-    const modifierCount = normalized.filter(isModifierKey).length;
-
-    if (normalized.length === 0 || modifierCount < 2) {
+    
+    // We require at least 2 keys for any shortcut to prevent accidental triggers
+    if (normalized.length < 2) {
       return;
     }
 
@@ -539,6 +540,7 @@ function SettingsTab() {
       console.warn('Could not register hotkey:', err);
     });
     setCapturedKeys([]);
+    capturedKeysRef.current = [];
     setIsRecordingHotkey(false);
   };
 
@@ -546,40 +548,47 @@ function SettingsTab() {
     if (!isRecordingHotkey) return;
     e.preventDefault();
 
-    const pressedParts = sortShortcutParts([
+    const modifierParts = [
       ...(e.ctrlKey ? ['Control'] : []),
       ...(e.altKey ? ['Alt'] : []),
       ...(e.shiftKey ? ['Shift'] : []),
       ...(e.metaKey ? ['Super'] : []),
-    ]);
-    const normalizedKey = normalizeKeyName(e.key);
+    ];
+    
+    const keyName = normalizeKeyName(e.key);
+    
+    // Create a new set of keys including existing ones and the new one
+    // We filter out duplicates and handle the current physical state
+    const currentCaptured = sortShortcutParts([...capturedKeysRef.current, ...modifierParts, keyName]);
+    capturedKeysRef.current = currentCaptured;
+    setCapturedKeys(currentCaptured);
 
-    if (isModifierKey(normalizedKey)) {
-      setCapturedKeys(pressedParts);
-      return;
+    // If we have 2+ keys and the just-pressed key is NOT a modifier, save immediately
+    if (currentCaptured.length >= 2 && !isModifierKey(keyName)) {
+        saveHotkey(currentCaptured);
     }
-
-    saveHotkey([...pressedParts, normalizedKey]);
   };
 
   const handleHotkeyRelease = (e: React.KeyboardEvent) => {
     if (!isRecordingHotkey) return;
 
-    const normalizedKey = normalizeKeyName(e.key);
-    if (!isModifierKey(normalizedKey)) return;
-
-    const nextCaptured = capturedKeys.filter((key) => key !== normalizedKey);
-    if (capturedKeys.length >= 2) {
-      saveHotkey(capturedKeys);
-      return;
+    // Handle modifier-only shortcuts or any multi-key combo on release
+    if (capturedKeysRef.current.length >= 2) {
+        saveHotkey(capturedKeysRef.current);
+        return;
     }
 
-    setCapturedKeys(nextCaptured);
+    // Clear ref and display if everything is released
+    if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+       capturedKeysRef.current = [];
+       setCapturedKeys([]);
+    }
   };
 
   const resetHotkey = () => {
     setHotkey(DEFAULT_HOTKEY);
     setCapturedKeys([]);
+    capturedKeysRef.current = [];
     invoke('update_hotkey', { newHotkey: DEFAULT_HOTKEY }).catch(err => {
       console.warn('Could not reset hotkey:', err);
     });
@@ -641,11 +650,16 @@ function SettingsTab() {
               }
               onFocus={() => {
                 setCapturedKeys([]);
+                capturedKeysRef.current = [];
                 setIsRecordingHotkey(true);
               }}
               onBlur={() => {
-                setCapturedKeys([]);
-                setIsRecordingHotkey(false);
+                // Delay a bit to allow onClick or other events to process if needed
+                setTimeout(() => {
+                  setCapturedKeys([]);
+                  capturedKeysRef.current = [];
+                  setIsRecordingHotkey(false);
+                }, 200);
               }}
               onKeyDown={handleHotkeyRecord}
               onKeyUp={handleHotkeyRelease}
