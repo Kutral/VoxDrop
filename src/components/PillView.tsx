@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
 import { useAppStore } from '../store';
 import { transcribeAudio, cleanupText } from '../lib/groq';
+import { playStartEarcon, playSuccessEarcon } from '../lib/sounds';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -205,6 +206,7 @@ export function PillView() {
         setPillState('listening');
         setStatusMsg('Listening...');
         recordingStartTime = Date.now();
+        playStartEarcon();
 
         // Recording and muting are now handled directly in Rust for speed.
       });
@@ -259,6 +261,7 @@ export function PillView() {
           await emit('history-update', historyItem);
           await invoke('paste_text', { text: cleanText });
 
+          playSuccessEarcon();
           setPillState('done');
           setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
           setTimeout(() => {

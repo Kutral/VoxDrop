@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appvoxdrop"
-version = "0.0.6"
+version = "0.0.7"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -35,5 +35,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_LibraryLoader",
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
 ] }
 windows = { version = "0.58.0", features = ["Foundation", "Media_Control"] }
