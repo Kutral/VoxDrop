@@ -175,15 +175,15 @@ pub fn run() {
         audio::setup_audio(&audio_state).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
         if let Some(window) = app.get_webview_window("pill") {
-            let _ = window.hide();
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: -9999.0, y: -9999.0 }));
             let _ = window.set_always_on_top(true);
         }
 
-        // Listen for pill-hide events from the frontend to hide the window reliably
+        // Listen for pill-hide events from the frontend to move the window offscreen reliably
         let app_handle = app.handle().clone();
         app.listen("pill-hide", move |_event| {
             if let Some(window) = app_handle.get_webview_window("pill") {
-                let _ = window.hide();
+                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: -9999.0, y: -9999.0 }));
             }
         });
 

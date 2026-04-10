@@ -83,7 +83,7 @@ pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
                         }
                         return;
                     }
-                    
+
                     if let Ok(mut lock) = wav_data.lock() {
                         for &sample in data {
                             lock.push((sample * i16::MAX as f32) as i16);
@@ -131,7 +131,14 @@ pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
 
     stream.play().map_err(|e| e.to_string())?;
     state_lock.stream = Some(StreamWrapper(stream));
-    eprintln!("[audio] Stream pre-warmed and running");
+    eprintln!("[audio] Stream created (paused, will start on demand)");
+    drop(state_lock);
+
+    let state_lock = state.lock().unwrap();
+    if let Some(ref stream) = state_lock.stream {
+        stream.0.pause().map_err(|e| e.to_string())?;
+    }
+    eprintln!("[audio] Stream paused until recording starts");
 
     Ok(())
 }
@@ -143,12 +150,16 @@ pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(),
 
 pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<(), String> {
     let state_lock = state.lock().unwrap();
-    
-    // Clear previous data
+
+    if let Some(ref stream) = state_lock.stream {
+        stream.0.play().map_err(|e| e.to_string())?;
+        eprintln!("[audio] Stream resumed for recording");
+    }
+
     if let Ok(mut data) = state_lock.wav_data.lock() {
         data.clear();
     }
-    
+
     state_lock.is_recording.store(true, Ordering::SeqCst);
     eprintln!("[audio] Recording started (flag set)");
     Ok(())
@@ -159,7 +170,12 @@ pub fn stop_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<Stri
     let (wav_data, spec) = {
         let state_lock = state.lock().unwrap();
         state_lock.is_recording.store(false, Ordering::SeqCst);
-        
+
+        if let Some(ref stream) = state_lock.stream {
+            let _ = stream.0.pause();
+            eprintln!("[audio] Stream paused after recording");
+        }
+
         let data = state_lock.wav_data.lock().unwrap().clone();
         let spec = state_lock.spec.ok_or("No audio spec found")?;
         (data, spec)
@@ -207,12 +223,15 @@ pub fn mute_system_internal() -> Result<bool, String> {
         let mut was_playing = false;
 
         let _ = (|| -> Result<(), windows::core::Error> {
-            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
-            
+            let manager =
+                GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
+
             if let Ok(session) = manager.GetCurrentSession() {
                 if let Ok(info) = session.GetPlaybackInfo() {
                     if let Ok(status) = info.PlaybackStatus() {
-                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                        if status
+                            == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing
+                        {
                             was_playing = true;
                             let _ = session.TryTogglePlayPauseAsync()?.get();
                         }
@@ -239,7 +258,8 @@ pub fn unmute_system(did_mute: bool) -> Result<(), String> {
     {
         use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
         let _ = (|| -> Result<(), windows::core::Error> {
-            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
+            let manager =
+                GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()?;
             if let Ok(session) = manager.GetCurrentSession() {
                 session.TryTogglePlayPauseAsync()?.get()?;
             }
