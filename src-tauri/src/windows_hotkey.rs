@@ -8,9 +8,9 @@ mod imp {
     use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage,
-        UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
-        WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        CallNextHookEx, DispatchMessageW, GetMessageW, SetTimer, SetWindowsHookExW,
+        TranslateMessage, UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG,
+        WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
     };
 
     const VK_SHIFT: u16 = 0x10;
@@ -58,7 +58,7 @@ mod imp {
                 return Some(c as u16);
             }
         }
-        
+
         match name.as_str() {
             "SPACE" => Some(0x20),
             "ENTER" => Some(0x0D),
@@ -154,6 +154,10 @@ mod imp {
             if hook.is_null() {
                 return;
             }
+
+            let timer_id = 1usize;
+            let timer_interval_ms = 60_000u32;
+            SetTimer(std::ptr::null_mut(), timer_id, timer_interval_ms, None);
 
             let mut message: MSG = std::mem::zeroed();
             while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {

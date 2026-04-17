@@ -38,6 +38,7 @@ interface AppState {
   setStatusMessage: (msg: string) => void;
   setSnippets: (snippets: Snippet[]) => void;
   addSnippet: (snippet: Snippet) => void;
+  updateSnippet: (id: number, snippet: Partial<Snippet>) => void;
   removeSnippet: (id: number) => void;
   setHistory: (history: HistoryItem[]) => void;
   addHistoryItem: (item: HistoryItem) => void;
@@ -65,6 +66,9 @@ export const useAppStore = create<AppState>()(
       setStatusMessage: (msg) => set({ statusMessage: msg }),
       setSnippets: (snippets) => set({ snippets }),
       addSnippet: (snippet) => set((state) => ({ snippets: [...state.snippets, snippet] })),
+      updateSnippet: (id, updatedSnippet) => set((state) => ({
+        snippets: state.snippets.map(s => s.id === id ? { ...s, ...updatedSnippet } : s)
+      })),
       removeSnippet: (id) => set((state) => ({ snippets: state.snippets.filter(s => s.id !== id) })),
       setHistory: (history) => set({ history }),
       addHistoryItem: (item) => set((state) => {

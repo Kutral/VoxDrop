@@ -5,7 +5,7 @@ import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type Rele
 import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { LayoutDashboard, History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command, Plus, Trash2 } from 'lucide-react';
+import { LayoutDashboard, History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command, Plus, Trash2, Edit2, Copy, Check } from 'lucide-react';
 
 export function MainView() {
   const [tab, setTab] = useState<'dashboard' | 'history' | 'snippets' | 'settings'>('dashboard');
@@ -349,22 +349,61 @@ function HistoryTab() {
 function SnippetsTab() {
   const snippets = useAppStore(state => state.snippets);
   const addSnippet = useAppStore(state => state.addSnippet);
+  const updateSnippet = useAppStore(state => state.updateSnippet);
   const removeSnippet = useAppStore(state => state.removeSnippet);
   const [trigger, setTrigger] = useState('');
   const [expansion, setExpansion] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
-  const handleAdd = () => {
+  const handleSave = () => {
     if (!trigger.trim() || !expansion.trim()) return;
-    addSnippet({
-      id: Date.now(),
-      trigger_phrase: trigger.trim(),
-      expansion: expansion.trim(),
-      created_at: new Date().toISOString(),
-    });
+    
+    if (editingId) {
+      updateSnippet(editingId, {
+        trigger_phrase: trigger.trim(),
+        expansion: expansion.trim(),
+      });
+    } else {
+      addSnippet({
+        id: Date.now(),
+        trigger_phrase: trigger.trim(),
+        expansion: expansion.trim(),
+        created_at: new Date().toISOString(),
+      });
+    }
+    
     setTrigger('');
     setExpansion('');
+    setEditingId(null);
     setShowForm(false);
+  };
+
+  const handleEdit = (snippet: any) => {
+    setTrigger(snippet.trigger_phrase);
+    setExpansion(snippet.expansion);
+    setEditingId(snippet.id);
+    setShowForm(true);
+  };
+
+  const handleCancel = () => {
+    setShowForm(!showForm);
+    if (!showForm) {
+      setEditingId(null);
+      setTrigger('');
+      setExpansion('');
+    } else {
+      setEditingId(null);
+      setTrigger('');
+      setExpansion('');
+    }
+  };
+
+  const handleCopy = (snippet: any) => {
+    navigator.clipboard.writeText(snippet.expansion);
+    setCopiedId(snippet.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -375,7 +414,7 @@ function SnippetsTab() {
           <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Magic keywords that expand into full sentences automatically.</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={handleCancel}
           className={`px-5 py-2.5 rounded-xl border shadow-sm text-[14px] font-semibold transition-all duration-200 flex items-center gap-2 ${
             showForm 
               ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50' 
@@ -416,11 +455,11 @@ function SnippetsTab() {
           </div>
           <div className="flex justify-end pt-2">
             <button
-              onClick={handleAdd}
+              onClick={handleSave}
               disabled={!trigger.trim() || !expansion.trim()}
               className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-[14px] font-semibold shadow-md shadow-indigo-600/20 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2"
             >
-              Assemble Snippet
+              {editingId ? 'Update Snippet' : 'Assemble Snippet'}
             </button>
           </div>
         </div>
@@ -442,12 +481,27 @@ function SnippetsTab() {
                 <span className="text-[13px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md tracking-wide">
                   {snippet.trigger_phrase}
                 </span>
-                <button 
-                  onClick={() => removeSnippet(snippet.id)}
-                  className="opacity-0 group-hover:opacity-100 text-[12px] font-semibold text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 border border-transparent hover:border-red-100 px-2.5 py-1 rounded-md transition-all flex items-center gap-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Remove
-                </button>
+                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => handleCopy(snippet)}
+                    className="text-[12px] font-semibold text-gray-500 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-transparent hover:border-indigo-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                  >
+                    {copiedId === snippet.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedId === snippet.id ? 'Copied' : 'Copy'}
+                  </button>
+                  <button 
+                    onClick={() => handleEdit(snippet)}
+                    className="text-[12px] font-semibold text-gray-500 hover:text-amber-600 bg-white hover:bg-amber-50 border border-transparent hover:border-amber-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button 
+                    onClick={() => removeSnippet(snippet.id)}
+                    className="text-[12px] font-semibold text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 border border-transparent hover:border-red-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                </div>
               </div>
               <p className="text-[15px] font-medium text-gray-600 leading-relaxed line-clamp-3">{snippet.expansion}</p>
             </div>
