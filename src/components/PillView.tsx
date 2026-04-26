@@ -5,7 +5,6 @@ import { useAppStore } from '../store';
 import { transcribeAudio, cleanupText } from '../lib/groq';
 import { playStartEarcon, playSuccessEarcon } from '../lib/sounds';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 type PillState = 'hidden' | 'listening' | 'processing' | 'done' | 'error';
 
@@ -45,6 +44,7 @@ export function PillView() {
   const [barHeights, setBarHeights] = useState<number[]>(
     new Array(BAR_COUNT).fill(IDLE_BAR_HEIGHT)
   );
+  const [isVisible, setIsVisible] = useState(false);
 
   const pillStateRef = useRef<PillState>(pillState);
   pillStateRef.current = pillState;
@@ -52,6 +52,9 @@ export function PillView() {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barHistoryRef = useRef<number[]>(new Array(BAR_COUNT).fill(0));
   const dynamicPeakRef = useRef(MIN_DYNAMIC_PEAK);
+
+  // Track text changes for CSS animation
+  const [textKey, setTextKey] = useState(0);
 
   const resetWaveform = useCallback(() => {
     if (pollTimeoutRef.current) {
@@ -140,7 +143,12 @@ export function PillView() {
 
   useEffect(() => {
     if (pillState === 'hidden') {
+      // Delay hiding to allow exit animation
+      const t = setTimeout(() => setIsVisible(false), 200);
       hidePillWindow();
+      return () => clearTimeout(t);
+    } else {
+      setIsVisible(true);
     }
   }, [pillState]);
 
@@ -197,6 +205,7 @@ export function PillView() {
         if (!apiKey) {
           setPillState('error');
           setStatusMsg('API Key missing - set it in Settings');
+          setTextKey(k => k + 1);
           setTimeout(() => {
             setPillState('hidden');
           }, 3000);
@@ -205,6 +214,7 @@ export function PillView() {
 
         setPillState('listening');
         setStatusMsg('Listening...');
+        setTextKey(k => k + 1);
         recordingStartTime = Date.now();
         playStartEarcon();
 
@@ -220,6 +230,7 @@ export function PillView() {
 
         setPillState('processing');
         setStatusMsg('Transcribing...');
+        setTextKey(k => k + 1);
 
         invoke('unmute_system', { didMute }).catch(() => {});
 
@@ -236,6 +247,7 @@ export function PillView() {
           }
 
           setStatusMsg('Cleaning up...');
+          setTextKey(k => k + 1);
           let cleanText = await cleanupText(rawText, apiKey, llamaModel);
 
           const snippets = useAppStore.getState().snippets;
@@ -258,18 +270,20 @@ export function PillView() {
           };
 
           useAppStore.getState().addHistoryItem(historyItem);
-          await emit('history-update', historyItem);
+          await emit('history-sync', historyItem);
           await invoke('paste_text', { text: cleanText });
 
           playSuccessEarcon();
           setPillState('done');
           setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
+          setTextKey(k => k + 1);
           setTimeout(() => {
             setPillState('hidden');
           }, 1800);
         } catch (err: unknown) {
           setPillState('error');
           setStatusMsg(describeProcessingError(err));
+          setTextKey(k => k + 1);
           setTimeout(() => {
             setPillState('hidden');
           }, 3000);
@@ -287,85 +301,93 @@ export function PillView() {
     };
   }, []);
 
+  if (!isVisible && pillState === 'hidden') return null;
+
+  const exiting = pillState === 'hidden';
+
   return (
-    <AnimatePresence>
-      {pillState !== 'hidden' && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 400 }}
-          className="w-full h-full bg-white/95 backdrop-blur-md flex items-center px-4 gap-3 relative overflow-hidden rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)]"
-          style={{ height: '48px', borderRadius: '24px' }}
+    <div
+      className={`w-full h-full flex items-center px-4 gap-3 relative overflow-hidden rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] transition-all duration-200 ${
+        exiting ? 'pill-exit-active' : 'pill-enter-active'
+      }`}
+      style={{
+        height: '48px',
+        borderRadius: '24px',
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(16px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(140%)',
+      }}
+    >
+      <div
+        className="absolute inset-0 rounded-full pointer-events-none"
+        style={{
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.06) 50%, rgba(217,70,239,0.06) 100%)',
+        }}
+      />
+
+      <div className="relative z-10 flex items-center w-full gap-3">
+        <div
+          className={`flex items-center justify-center shrink-0 border transition-all duration-300 ${
+            pillState === 'listening'
+              ? 'h-10 min-w-[78px] rounded-full px-3 border-rose-200/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_4px_12px_rgba(244,63,94,0.08)]'
+              : 'w-10 h-10 rounded-full bg-white/40 border-white/60 shadow-sm'
+          }`}
+          style={
+            pillState === 'listening'
+              ? {
+                  background:
+                    'radial-gradient(circle at top, rgba(255,255,255,0.85), transparent 55%), linear-gradient(135deg, rgba(244,63,94,0.04), rgba(251,146,60,0.04))',
+                }
+              : undefined
+          }
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/50 via-violet-50/50 to-fuchsia-50/50 rounded-full pointer-events-none" />
+          {pillState === 'listening' && (
+            <div className="flex items-center gap-2 h-6 w-full">
+              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0 listening-dot" />
 
-          <div className="relative z-10 flex items-center w-full gap-3">
-            <div
-              className={`flex items-center justify-center shrink-0 border ${
-                pillState === 'listening'
-                  ? 'h-10 min-w-[78px] rounded-full px-3 border-rose-100 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.8),transparent_55%),linear-gradient(135deg,rgba(244,63,94,0.05),rgba(251,146,60,0.05))] shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_4px_12px_rgba(244,63,94,0.1)]'
-                  : 'w-10 h-10 rounded-full bg-gray-50 border-gray-100 shadow-sm'
-              }`}
-            >
-              {pillState === 'listening' && (
-                <div className="flex items-center gap-2 h-6 w-full">
-                  <motion.div
-                    animate={{ opacity: [0.5, 1, 0.5], scale: [0.94, 1, 0.94] }}
-                    transition={{ repeat: Infinity, duration: 1.25, ease: 'easeInOut' }}
-                    className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0"
+              <div className="flex items-center gap-[2px] h-6 flex-1">
+                {barHeights.map((height, index) => (
+                  <div
+                    key={index}
+                    className="w-[2px] rounded-full bg-gradient-to-t from-rose-500 to-amber-400 shadow-sm waveform-bar"
+                    style={{
+                      height: `${height}px`,
+                      opacity: 0.48 + (height / MAX_BAR_HEIGHT) * 0.52,
+                    }}
                   />
-
-                  <div className="flex items-center gap-[2px] h-6 flex-1">
-                    {barHeights.map((height, index) => (
-                      <motion.div
-                        key={index}
-                        animate={{ height: `${height}px`, opacity: 0.48 + (height / MAX_BAR_HEIGHT) * 0.52 }}
-                        transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
-                        className="w-[2px] rounded-full bg-gradient-to-t from-rose-500 to-amber-400 shadow-sm"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {pillState === 'processing' && (
-                <div className="flex gap-1.5">
-                  {[...Array(3)].map((_, i) => (
-                    <motion.div
-                      key={i}
-                      animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
-                      transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                      className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
-                    />
-                  ))}
-                </div>
-              )}
-
-              {pillState === 'done' && (
-                <CheckCircle2 className="w-5 h-5 text-emerald-500 drop-shadow-sm" />
-              )}
-              {pillState === 'error' && (
-                <AlertTriangle className="w-5 h-5 text-rose-500 drop-shadow-sm" />
-              )}
+                ))}
+              </div>
             </div>
+          )}
 
-            <div className="flex-1 min-w-0 pr-2">
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={statusMsg}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  className="block text-[15px] font-bold text-gray-800 truncate tracking-wide"
-                >
-                  {statusMsg}
-                </motion.span>
-              </AnimatePresence>
+          {pillState === 'processing' && (
+            <div className="flex gap-1.5">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)] processing-dot"
+                />
+              ))}
             </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          )}
+
+          {pillState === 'done' && (
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 drop-shadow-sm" />
+          )}
+          {pillState === 'error' && (
+            <AlertTriangle className="w-5 h-5 text-rose-500 drop-shadow-sm" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 pr-2 overflow-hidden">
+          <span
+            key={textKey}
+            className="block text-[15px] font-bold text-gray-800 truncate tracking-wide pill-text-enter-active"
+          >
+            {statusMsg}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }

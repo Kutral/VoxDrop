@@ -84,28 +84,39 @@ export function MainView() {
   const navItem = (id: 'dashboard' | 'history' | 'snippets' | 'settings', Icon: any, label: string) => {
     const active = tab === id;
     return (
-      <button 
-        onClick={() => setTab(id)} 
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 ${
-          active 
-            ? 'bg-gray-900 text-white shadow-md shadow-gray-900/10' 
-            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+      <button
+        onClick={() => setTab(id)}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${
+          active
+            ? 'bg-white/30 text-indigo-900 border border-white/60 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.03),inset_0_1px_0_rgba(255,255,255,0.5)]'
+            : 'text-gray-500 hover:bg-white/20 hover:text-indigo-800 border border-transparent hover:border-white/30'
         }`}
       >
-        <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.5 : 2} />
-        <span className="text-[14px] font-medium tracking-wide">{label}</span>
+        <Icon className={`w-[18px] h-[18px] ${active ? 'text-indigo-600' : ''}`} strokeWidth={active ? 2.5 : 2} />
+        <span className={`text-[14px] tracking-wide ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
       </button>
     );
   };
 
   return (
-    <div className="w-screen h-screen bg-[#F9FAFB] text-gray-900 flex font-sans overflow-hidden">
+    <div className="w-screen h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50/40 text-gray-900 flex font-sans overflow-hidden relative">
+      {/* Animated Background Mesh */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[55%] rounded-full bg-purple-300/50 blur-[120px] animate-blob mix-blend-multiply"></div>
+        <div className="absolute top-[15%] right-[-12%] w-[40%] h-[45%] rounded-full bg-indigo-300/50 blur-[120px] animate-blob mix-blend-multiply" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute bottom-[-25%] left-[15%] w-[55%] h-[45%] rounded-full bg-blue-300/50 blur-[120px] animate-blob mix-blend-multiply" style={{ animationDelay: '4s' }}></div>
+        <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] rounded-full bg-pink-300/40 blur-[100px] animate-blob mix-blend-multiply" style={{ animationDelay: '6s' }}></div>
+      </div>
+
+      {/* Glass edge light overlay */}
+      <div className="absolute inset-0 pointer-events-none z-[1] bg-gradient-to-b from-white/30 via-transparent to-white/10"></div>
+
       {/* Sidebar */}
-      <div className="w-[240px] h-full flex flex-col bg-white border-r border-gray-200/60 p-5 flex-shrink-0 z-20 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)]">
-        
+      <div className="w-[240px] h-full flex flex-col glass-panel p-5 flex-shrink-0 z-20 border-r border-white/40">
+
         {/* Brand */}
         <div className="flex items-center gap-3 px-2 mb-10 mt-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm border border-gray-100">
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm border border-white/40 bg-white/30 backdrop-blur-md">
             <img src="/app-icon.png" alt="VoxDrop Logo" className="w-full h-full object-cover" />
           </div>
           <span className="text-lg font-bold tracking-tight text-gray-900">VoxDrop</span>
@@ -126,7 +137,7 @@ export function MainView() {
       </div>
 
       {/* Main Content Pane */}
-      <div className="flex-1 h-full relative z-10 overflow-hidden flex flex-col bg-[#F9FAFB]">
+      <div className="flex-1 h-full relative z-10 overflow-hidden flex flex-col bg-transparent">
          <div className="content-scroll flex-1 overflow-y-auto custom-scrollbar p-10 lg:p-14 relative">
             <div className="max-w-[840px] mx-auto w-full relative z-10">
               {tab === 'dashboard' && <DashboardTab />}
@@ -226,10 +237,10 @@ function DashboardTab() {
   return (
     <div className="pb-6 animate-fade-in">
       <div className="mb-14">
-        <h1 className="text-[42px] font-semibold tracking-tight text-gray-900 mb-2">{greeting}</h1>
-        <div className="flex items-center text-[17px] text-gray-500 gap-1.5 font-medium">
+        <h1 className="text-[44px] font-bold tracking-tight text-gradient mb-2">{greeting}</h1>
+        <div className="flex items-center text-[17px] text-gray-600 gap-1.5 font-medium">
           Hold down 
-          <kbd className="px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700 shadow-sm text-sm font-mono mx-1">
+          <kbd className="px-2.5 py-1 rounded-lg bg-white/20 border border-white/50 text-indigo-900 text-sm font-mono mx-1 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_2px_6px_rgba(0,0,0,0.04)]">
             {formatHotkeyLabel(hotkey)}
           </kbd> 
           and speak into any textbox
@@ -238,47 +249,56 @@ function DashboardTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Streak Card */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:shadow-[0_8px_24px_-8px_rgba(0,0,0,0.06)] transition-shadow">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-gray-600 font-medium">Weekly streak</span>
+        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
+          <div className="relative z-10 flex flex-col h-full justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Weekly streak</span>
+              </div>
+              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight">
+                {weeklyStreak === 0 ? '0 weeks' : `${weeklyStreak}${weeklyStreak === 1 ? 'st' : weeklyStreak === 2 ? 'nd' : weeklyStreak === 3 ? 'rd' : 'th'} week`}
+              </div>
             </div>
-            <div className="text-[28px] font-semibold text-gray-900 mb-1">
-              {weeklyStreak === 0 ? '0 weeks' : `${weeklyStreak}${weeklyStreak === 1 ? 'st' : weeklyStreak === 2 ? 'nd' : weeklyStreak === 3 ? 'rd' : 'th'} week`}
+            <div className="text-[15px] text-gray-500 font-medium mt-6">
+              {weeklyStreak > 0 ? 'You are off to a great start!' : 'Start dictating to build a streak!'}
             </div>
-          </div>
-          <div className="text-[15px] text-gray-400 font-medium mt-6">
-            {weeklyStreak > 0 ? 'You are off to a great start!' : 'Start dictating to build a streak!'}
           </div>
         </div>
 
         {/* Speed Card */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:shadow-[0_8px_24px_-8px_rgba(0,0,0,0.06)] transition-shadow">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-gray-600 font-medium">Average Flowing speed</span>
+        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-teal-400/20 to-emerald-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
+          <div className="relative z-10 flex flex-col h-full justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Average Speed</span>
+              </div>
+              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight">
+                {averageWpm > 0 ? averageWpm : 0} <span className="text-[20px] text-gray-500 font-semibold">WPM</span>
+              </div>
             </div>
-            <div className="text-[28px] font-semibold text-gray-900 mb-1">
-              {averageWpm > 0 ? averageWpm : 0} WPM
+            <div className="text-[15px] text-gray-500 font-medium mt-6">
+              {averageWpm > 0 ? (averageWpm > 60 ? 'Faster than 90% of typers' : 'Steady and clear') : 'Start dictating to track speed'}
             </div>
-          </div>
-          <div className="text-[15px] text-gray-400 font-medium mt-6">
-            {averageWpm > 0 ? (averageWpm > 60 ? 'Faster than 90% of typers' : 'Steady and clear') : 'Start dictating to track speed'}
           </div>
         </div>
 
         {/* Total Words Card */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:shadow-[0_8px_24px_-8px_rgba(0,0,0,0.06)] transition-shadow">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-gray-600 font-medium">Total words dictated</span>
+        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-400/20 to-orange-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
+          <div className="relative z-10 flex flex-col h-full justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Total words</span>
+              </div>
+              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight flex items-center gap-2">
+                {totalWords} <span className="text-[24px]">🔥</span>
+              </div>
             </div>
-            <div className="text-[28px] font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              {totalWords} <span className="text-2xl">🔥</span>
+            <div className="text-[15px] text-gray-500 font-medium mt-6">
+              {postcards > 0 ? `You've written ${postcards} postcard${postcards !== 1 ? 's' : ''}!` : "Keep going to fill a postcard!"}
             </div>
-          </div>
-          <div className="text-[15px] text-gray-400 font-medium mt-6">
-            {postcards > 0 ? `You've written ${postcards} postcard${postcards !== 1 ? 's' : ''}!` : "Keep going to fill a postcard!"}
           </div>
         </div>
       </div>
@@ -298,12 +318,12 @@ function HistoryTab() {
     <div className="pb-6 animate-fade-in">
       <div className="flex justify-between items-end mb-10">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 pb-1">Activity Log</h1>
+          <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Activity Log</h1>
           <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Every word captured and refined, safely stored locally on your machine.</p>
         </div>
-        <button 
+        <button
           onClick={() => setHistory([])}
-          className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-red-200 hover:bg-red-50 hover:text-red-600 text-[14px] font-medium text-gray-600 transition-all duration-200"
+          className="px-5 py-2.5 rounded-xl glass-btn hover:border-rose-200/60 hover:bg-rose-50/40 hover:text-rose-600 text-[14px] font-medium text-gray-600 transition-all duration-200"
         >
           Clear All
         </button>
@@ -311,33 +331,33 @@ function HistoryTab() {
       
       <div className="space-y-4">
         {sortedHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 px-4 rounded-3xl border border-dashed border-gray-200 bg-white/50">
-            <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mb-5 border border-gray-100">
-              <Sparkles className="w-7 h-7 text-gray-400" />
+          <div className="flex flex-col items-center justify-center py-24 px-4 rounded-3xl glass-surface">
+            <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mb-5 border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md">
+              <Sparkles className="w-7 h-7 text-indigo-400" />
             </div>
-            <p className="text-gray-900 font-medium text-lg tracking-tight">Ready for your voice</p>
+            <p className="text-gray-900 font-bold text-lg tracking-tight">Ready for your voice</p>
             <p className="text-gray-500 text-[15px] mt-1 font-medium">Use your hotkey to start recording.</p>
           </div>
         ) : (
           sortedHistory.map(item => (
-            <div key={item.id} className="p-6 rounded-2xl bg-white border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow group relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div key={item.id} className="p-6 rounded-2xl glass-card group relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                  <span className="text-[12px] font-semibold text-gray-400 tracking-wider">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
+                  <span className="text-[12px] font-bold text-gray-500 tracking-wider uppercase">
                     {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                   </span>
                 </div>
-                <button 
+                <button
                   onClick={() => navigator.clipboard.writeText(item.transcript)}
-                  className="text-[12px] font-semibold bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-100 hover:text-indigo-600 text-gray-500 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                  className="text-[12px] font-bold glass-btn hover:text-indigo-600 text-gray-500 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
                 >
                   <ClipboardList className="w-3.5 h-3.5" />
                   Copy
                 </button>
               </div>
-              <p className="text-[16px] text-gray-700 leading-relaxed font-medium">{item.transcript}</p>
+              <p className="text-[16px] text-gray-800 leading-relaxed font-medium pl-1">{item.transcript}</p>
             </div>
           ))
         )}
@@ -410,15 +430,15 @@ function SnippetsTab() {
     <div className="pb-6 animate-fade-in">
       <div className="flex justify-between items-end mb-10">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 pb-1">Snippets</h1>
+          <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Snippets</h1>
           <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Magic keywords that expand into full sentences automatically.</p>
         </div>
         <button
           onClick={handleCancel}
           className={`px-5 py-2.5 rounded-xl border shadow-sm text-[14px] font-semibold transition-all duration-200 flex items-center gap-2 ${
-            showForm 
-              ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50' 
-              : 'bg-gray-900 border-gray-900 text-white hover:bg-gray-800'
+            showForm
+              ? 'glass-btn text-gray-700 hover:bg-white/40'
+              : 'glass-btn-primary'
           }`}
         >
           {showForm ? 'Cancel' : <><Plus className="w-4 h-4"/> New Snippet</>}
@@ -427,7 +447,7 @@ function SnippetsTab() {
 
       {/* Add Snippet Form */}
       {showForm && (
-        <div className="mb-8 p-6 rounded-2xl bg-white border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5 animate-in slide-in-from-top-2">
+        <div className="mb-8 p-6 rounded-2xl glass-card space-y-5 animate-in slide-in-from-top-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-[13px] font-semibold text-gray-700 mb-2">Trigger Phrase</label>
@@ -438,18 +458,18 @@ function SnippetsTab() {
                   value={trigger}
                   onChange={e => setTrigger(e.target.value)}
                   placeholder="e.g. my link"
-                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                  className="w-full glass-input pl-10 pr-4"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-[13px] font-semibold text-gray-700 mb-2">Expansion Content</label>
+              <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Expansion Content</label>
               <textarea
                 value={expansion}
                 onChange={e => setExpansion(e.target.value)}
                 placeholder="e.g. https://github.com/my-profile"
                 rows={2}
-                className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none font-medium"
+                className="w-full glass-input resize-none"
               />
             </div>
           </div>
@@ -457,7 +477,7 @@ function SnippetsTab() {
             <button
               onClick={handleSave}
               disabled={!trigger.trim() || !expansion.trim()}
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-[14px] font-semibold shadow-md shadow-indigo-600/20 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2"
+              className="px-6 py-2.5 rounded-xl glass-btn-primary text-[14px] font-semibold disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2"
             >
               {editingId ? 'Update Snippet' : 'Assemble Snippet'}
             </button>
@@ -468,36 +488,36 @@ function SnippetsTab() {
       {/* Snippets List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {snippets.length === 0 && !showForm ? (
-          <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center py-24 px-4 rounded-3xl border border-dashed border-gray-200 bg-white/50">
-            <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
-              <ClipboardList className="w-7 h-7 text-gray-400" />
+          <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center py-24 px-4 rounded-3xl glass-surface">
+            <div className="w-16 h-16 rounded-2xl bg-white/20 border border-white/50 flex items-center justify-center mb-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md">
+              <ClipboardList className="w-7 h-7 text-indigo-400" />
             </div>
-            <p className="text-gray-500 font-medium text-[15px]">No snippets configured yet</p>
+            <p className="text-gray-500 font-bold text-[15px]">No snippets configured yet</p>
           </div>
         ) : (
           snippets.map(snippet => (
-            <div key={snippet.id} className="p-5 rounded-2xl bg-white border border-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.03)] hover:shadow-md transition-all group relative">
+            <div key={snippet.id} className="p-5 rounded-2xl glass-card group relative">
               <div className="flex justify-between items-start mb-3">
                 <span className="text-[13px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md tracking-wide">
                   {snippet.trigger_phrase}
                 </span>
                 <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
+                  <button
                     onClick={() => handleCopy(snippet)}
-                    className="text-[12px] font-semibold text-gray-500 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-transparent hover:border-indigo-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="text-[12px] font-bold text-gray-600 hover:text-indigo-700 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
                   >
                     {copiedId === snippet.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     {copiedId === snippet.id ? 'Copied' : 'Copy'}
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleEdit(snippet)}
-                    className="text-[12px] font-semibold text-gray-500 hover:text-amber-600 bg-white hover:bg-amber-50 border border-transparent hover:border-amber-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="text-[12px] font-bold text-gray-600 hover:text-amber-700 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
                   >
                     <Edit2 className="w-3.5 h-3.5" /> Edit
                   </button>
-                  <button 
+                  <button
                     onClick={() => removeSnippet(snippet.id)}
-                    className="text-[12px] font-semibold text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 border border-transparent hover:border-red-100 px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="text-[12px] font-bold text-gray-600 hover:text-rose-600 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Delete
                   </button>
@@ -674,17 +694,18 @@ function SettingsTab() {
   };
 
   const SettingSection = ({ title, description, children }: any) => (
-    <div className="p-6 rounded-2xl bg-white border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow">
-      <h3 className="text-[17px] font-bold text-gray-900 tracking-tight">{title}</h3>
-      <p className="text-[14px] text-gray-500 mt-1.5 mb-5 font-medium">{description}</p>
-      {children}
+    <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
+      <div className="absolute -inset-x-4 -inset-y-4 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none opacity-50 mix-blend-overlay"></div>
+      <h3 className="text-[18px] font-bold text-gray-900 tracking-tight relative z-10">{title}</h3>
+      <p className="text-[14px] text-gray-600 mt-1 mb-5 font-medium relative z-10">{description}</p>
+      <div className="relative z-10">{children}</div>
     </div>
   );
 
   return (
     <div className="pb-16 animate-fade-in">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 pb-1">Preferences</h1>
+        <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Preferences</h1>
         <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Fine-tune the intelligence engine behind VoxDrop.</p>
       </div>
       
@@ -694,8 +715,8 @@ function SettingsTab() {
           description="Click the input box and press your desired key combination. Modifier-only shortcuts like Ctrl + Win are supported."
         >
           <div className="flex gap-3">
-            <input 
-              type="text" 
+            <input
+              type="text"
               readOnly
               value={
                 isRecordingHotkey
@@ -717,12 +738,12 @@ function SettingsTab() {
               }}
               onKeyDown={handleHotkeyRecord}
               onKeyUp={handleHotkeyRelease}
-              className={`flex-1 bg-gray-50/50 border rounded-xl px-4 py-3.5 text-[15px] text-gray-900 focus:outline-none transition-all font-mono tracking-wide cursor-pointer text-center font-semibold
-                ${isRecordingHotkey ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-white" : "border-gray-200 focus:border-indigo-400"}`}
+              className={`flex-1 glass-input text-center font-mono tracking-wide cursor-pointer font-semibold
+                ${isRecordingHotkey ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-white/30" : ""}`}
             />
             <button
               onClick={resetHotkey}
-              className="px-5 rounded-xl border border-gray-200 text-[14px] font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 shadow-sm transition-all"
+              className="px-5 rounded-xl glass-btn text-[14px] font-semibold text-gray-600 hover:text-gray-900 transition-all"
             >
               Reset
             </button>
@@ -736,25 +757,25 @@ function SettingsTab() {
         >
           <div className="flex gap-3">
             <div className="flex-1 relative">
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="gsk_################"
-                className="w-full bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3.5 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-medium"
+                className="w-full glass-input font-mono"
               />
             </div>
-            <button 
+            <button
               onClick={handleTestKey}
               disabled={!apiKey || testStatus === 'testing'}
               className={`px-6 rounded-xl text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center min-w-[130px]
-                ${testStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 
-                  testStatus === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 
-                  'bg-gray-900 text-white hover:bg-gray-800 border border-gray-900 disabled:opacity-50 disabled:bg-gray-800'}`}
+                ${testStatus === 'success' ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-400/40 backdrop-blur-md' :
+                  testStatus === 'error' ? 'bg-rose-500/15 text-rose-700 border border-rose-400/40 backdrop-blur-md' :
+                  'glass-btn-primary disabled:opacity-50 disabled:shadow-none'}`}
             >
-              {testStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : 
-               testStatus === 'success' ? <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4"/> Valid</span> : 
-               testStatus === 'error' ? <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4"/> Invalid</span> : 
+              {testStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> :
+               testStatus === 'success' ? <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4"/> Valid</span> :
+               testStatus === 'error' ? <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4"/> Invalid</span> :
                'Authenticate'}
             </button>
           </div>
@@ -766,10 +787,10 @@ function SettingsTab() {
             description="Whisper model for audio transcription."
           >
             <div className="relative">
-              <select 
+              <select
                 value={whisperModel}
                 onChange={(e) => setWhisperModel(e.target.value)}
-                className="w-full appearance-none bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer font-semibold shadow-sm"
+                className="w-full appearance-none glass-input cursor-pointer font-semibold text-[14px] py-3"
               >
                 <option value="whisper-large-v3-turbo">Whisper Turbo (Fast)</option>
                 <option value="whisper-large-v3">Whisper V3 (Accurate)</option>
@@ -785,10 +806,10 @@ function SettingsTab() {
             description="LLM for formatting and cleanup."
           >
             <div className="relative">
-              <select 
+              <select
                 value={llamaModel}
                 onChange={(e) => setLlamaModel(e.target.value)}
-                className="w-full appearance-none bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer font-semibold shadow-sm"
+                className="w-full appearance-none glass-input cursor-pointer font-semibold text-[14px] py-3"
               >
                 <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
                 <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
@@ -810,7 +831,7 @@ function SettingsTab() {
               <button
                 onClick={handleCheckForUpdates}
                 disabled={updateStatus === 'checking'}
-                className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-900 text-[14px] font-semibold shadow-sm transition-all disabled:opacity-60 flex items-center gap-2"
+                className="px-5 py-2.5 rounded-xl glass-btn text-gray-700 hover:text-gray-900 text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center gap-2"
               >
                 {updateStatus === 'checking' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
@@ -818,13 +839,13 @@ function SettingsTab() {
 
               <button
                 onClick={() => openReleasePage()}
-                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[14px] font-semibold text-gray-600 hover:bg-gray-100 transition-all shadow-sm"
+                className="px-5 py-2.5 rounded-xl glass-btn text-[14px] font-semibold text-gray-600 hover:text-gray-900 transition-all"
               >
                 Open Releases
               </button>
             </div>
 
-            <div className="rounded-xl border border-gray-100 bg-gray-50/50 px-4 py-3">
+            <div className="rounded-xl glass-surface px-4 py-3">
               <p className="text-[14px] text-gray-600 font-medium">
                 Installed version: <span className="text-gray-900 font-bold">{updateInfo?.currentVersion ?? 'Unknown'}</span>
               </p>
@@ -842,7 +863,7 @@ function SettingsTab() {
                   </p>
                   <button
                     onClick={() => openReleasePage(updateInfo.htmlUrl)}
-                    className="px-4 py-2 rounded-lg bg-amber-100 border border-amber-200 text-amber-800 text-[13px] font-bold tracking-wide hover:bg-amber-200 transition-colors"
+                    className="px-4 py-2 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-800 text-[13px] font-bold tracking-wide hover:bg-amber-500/25 transition-colors backdrop-blur-md"
                   >
                     Download Latest Release
                   </button>

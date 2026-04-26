@@ -107,3 +107,8 @@ VoxDrop/
 - SQLite database for structured data (via Tauri SQL plugin)
 - Audio earcons synthesized via Web Audio API (no external audio files)
 - Audio stream uses pause/play pattern to avoid keeping microphone active when idle (fixes Windows privacy indicator showing mic "in use" when not recording)
+
+## Recent Milestones
+
+- **v0.0.9 (2026-04-17)**: Added inline 'Edit' and 'Copy' buttons for Snippets within the UI, updated the state manager (Zustand) to handle snippet modifications, and refreshed the README with polished formatting and updated Groq models (Llama 3.1/3.3, Allam).
+- **v0.0.10 (2026-04-26)**: Completely overhauled the UI to a modern fluid glassmorphic design featuring animated gradient mesh backgrounds and semi-transparent glass panels. Resolved an IPC event mismatch bug (`history-update` vs `history-sync`) that prevented dashboard activity counters from updating in real-time.

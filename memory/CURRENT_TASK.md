@@ -3,8 +3,10 @@
 ## Objective
 Fix microphone showing as "in use" when app is idle
 
-## Secondary Objective (Completed 2026-04-17)
-- Implemented inline Copy and Edit buttons for Snippets in the UI.
+## Completed Secondary Objectives (2026-04-26)
+- Completely overhauled the frontend to feature a premium fluid glassmorphic UI with animated mesh backgrounds.
+- Fixed an IPC event mismatch (`history-update` vs `history-sync`) that was preventing the Dashboard statistics (streak, word count, speed) from updating after a dictation.
+- Prior to this (2026-04-17): Implemented inline Copy/Edit buttons for Snippets and bumped version to v0.0.9.
 
 ## Scope
 ### In scope
@@ -13,7 +15,7 @@ Fix microphone showing as "in use" when app is idle
 - Ensuring microphone is released when idle
 
 ### Out of scope (do not touch)
-- Modifying the frontend UI for recording
+- Modifying the frontend UI for recording (unless specifically requested)
 - Changing audio format or processing
 
 ## Files involved
@@ -27,4 +29,4 @@ Fix microphone showing as "in use" when app is idle
 - None currently.
 
 ## Last updated
-2026-04-17 — Finished adding copy and edit buttons to snippets. The primary objective (audio.rs fix) is up next.
+2026-04-26 — Overhauled the UI with a fluid glassmorphic design and fixed the dashboard counters synchronization bug. The very next step for the next session is to return to the primary objective (modifying `src-tauri/src/audio.rs` to fix the idle microphone privacy indicator issue).
