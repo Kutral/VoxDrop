@@ -68,14 +68,16 @@ fn update_hotkey(app: tauri::AppHandle, new_hotkey: String) -> Result<(), String
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
     let normalized_hotkey = new_hotkey.trim().to_string();
-    windows_hotkey::set_hotkey(&normalized_hotkey);
 
     // Unregister whatever is currently active
     let _ = app.global_shortcut().unregister_all();
 
     if hotkey_is_modifier_only(&normalized_hotkey) {
+        windows_hotkey::set_hotkey(&normalized_hotkey);
         return Ok(());
     }
+
+    windows_hotkey::set_hotkey("");
 
     // Register the new hotkey
     let new_shortcut = Shortcut::from_str(&normalized_hotkey)
@@ -170,12 +172,11 @@ pub fn run() {
         update_hotkey(app.handle().clone(), DEFAULT_HOTKEY.to_string())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
-        // Pre-warm audio subsystem
-        let audio_state = app.state::<std::sync::Mutex<audio::AudioState>>();
-        audio::setup_audio(&audio_state).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-
         if let Some(window) = app.get_webview_window("pill") {
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: -9999.0, y: -9999.0 }));
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                x: -9999.0,
+                y: -9999.0,
+            }));
             let _ = window.set_always_on_top(true);
         }
 
@@ -183,7 +184,10 @@ pub fn run() {
         let app_handle = app.handle().clone();
         app.listen("pill-hide", move |_event| {
             if let Some(window) = app_handle.get_webview_window("pill") {
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: -9999.0, y: -9999.0 }));
+                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                    x: -9999.0,
+                    y: -9999.0,
+                }));
             }
         });
 
@@ -193,9 +197,19 @@ pub fn run() {
 
             // Immediate recording start and system mute in Rust
             let audio_state = app_handle3.state::<std::sync::Mutex<audio::AudioState>>();
-            let _ = audio::start_recording_internal(&audio_state);
+            let did_start = match audio::start_recording_internal(&audio_state) {
+                Ok(did_start) => did_start,
+                Err(err) => {
+                    eprintln!("[audio] Failed to start recording: {}", err);
+                    return;
+                }
+            };
+            if !did_start {
+                return;
+            }
+
             let did_mute = audio::mute_system_internal().unwrap_or(false);
-            
+
             // Notify frontend about the mute state so it can unmute later
             let _ = app_handle3.emit("audio-muted", did_mute);
         });

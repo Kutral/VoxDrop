@@ -68,7 +68,7 @@ export async function checkForGitHubUpdate(): Promise<ReleaseCheckResult> {
   return {
     currentVersion,
     latestVersion,
-    hasUpdate: latestVersion ? compareVersions(currentVersion, latestVersion) < 0 : false,
+    hasUpdate: latestVersion ? compareVersions(currentVersion, latestVersion) > 0 : false,
     htmlUrl: payload.html_url || RELEASES_PAGE_URL,
     publishedAt: payload.published_at || null,
     notes: payload.body?.trim() || '',

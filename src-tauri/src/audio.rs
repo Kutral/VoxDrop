@@ -65,6 +65,10 @@ pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
     };
 
     let mut state_lock = state.lock().unwrap();
+    if state_lock.stream.is_some() {
+        return Ok(());
+    }
+
     state_lock.spec = Some(spec);
     let wav_data = state_lock.wav_data.clone();
     let rms_level = state_lock.rms_level.clone();
@@ -126,6 +130,36 @@ pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
                 None,
             )
             .map_err(|e| e.to_string())?,
+        SampleFormat::U16 => device
+            .build_input_stream(
+                &config.into(),
+                move |data: &[u16], _: &_| {
+                    if !is_recording.load(Ordering::SeqCst) {
+                        if let Ok(mut level) = rms_level.lock() {
+                            *level = 0.0;
+                        }
+                        return;
+                    }
+
+                    let converted: Vec<i16> = data
+                        .iter()
+                        .map(|&sample| (sample as i32 - 32768) as i16)
+                        .collect();
+
+                    if let Ok(mut lock) = wav_data.lock() {
+                        lock.extend_from_slice(&converted);
+                    }
+                    if !converted.is_empty() {
+                        let rms = compute_rms(&converted);
+                        if let Ok(mut level) = rms_level.lock() {
+                            *level = rms;
+                        }
+                    }
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| e.to_string())?,
         _ => return Err("Unsupported sample format".to_string()),
     };
 
@@ -145,24 +179,46 @@ pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn start_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<(), String> {
-    start_recording_internal(&state)
+    start_recording_internal(&state).map(|_| ())
 }
 
-pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<(), String> {
+pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<bool, String> {
+    {
+        let state_lock = state.lock().unwrap();
+        if state_lock.is_recording.load(Ordering::SeqCst) {
+            eprintln!("[audio] Recording start ignored; already recording");
+            return Ok(false);
+        }
+
+        if state_lock.stream.is_none() {
+            drop(state_lock);
+            setup_audio(state)?;
+        }
+    }
+
     let state_lock = state.lock().unwrap();
 
+    if state_lock.is_recording.swap(true, Ordering::SeqCst) {
+        eprintln!("[audio] Recording start ignored; already recording");
+        return Ok(false);
+    }
+
     if let Some(ref stream) = state_lock.stream {
-        stream.0.play().map_err(|e| e.to_string())?;
+        if let Err(err) = stream.0.play() {
+            state_lock.is_recording.store(false, Ordering::SeqCst);
+            return Err(err.to_string());
+        }
         eprintln!("[audio] Stream resumed for recording");
+    } else {
+        state_lock.is_recording.store(false, Ordering::SeqCst);
+        return Err("Audio stream is not available".to_string());
     }
 
     if let Ok(mut data) = state_lock.wav_data.lock() {
         data.clear();
     }
-
-    state_lock.is_recording.store(true, Ordering::SeqCst);
     eprintln!("[audio] Recording started (flag set)");
-    Ok(())
+    Ok(true)
 }
 
 #[tauri::command]

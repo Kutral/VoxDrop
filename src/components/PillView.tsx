@@ -52,6 +52,9 @@ export function PillView() {
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barHistoryRef = useRef<number[]>(new Array(BAR_COUNT).fill(0));
   const dynamicPeakRef = useRef(MIN_DYNAMIC_PEAK);
+  const didMuteRef = useRef(false);
+  const muteEventSeenRef = useRef(false);
+  const cleanupOnMuteEventRef = useRef(false);
 
   // Track text changes for CSS animation
   const [textKey, setTextKey] = useState(0);
@@ -193,16 +196,47 @@ export function PillView() {
 
       let recordingStartTime = 0;
 
+      const unmuteIfNeeded = () => {
+        if (!didMuteRef.current) return;
+        invoke('unmute_system', { didMute: true }).catch(() => {});
+        didMuteRef.current = false;
+        cleanupOnMuteEventRef.current = false;
+      };
+
+      const cleanupNativeCapture = () => {
+        if (!muteEventSeenRef.current) {
+          cleanupOnMuteEventRef.current = true;
+        }
+        invoke('stop_recording').catch(() => {});
+        unmuteIfNeeded();
+      };
+
       unlistenMute = await listen<boolean>('audio-muted', (event) => {
         didMute = event.payload;
+        didMuteRef.current = event.payload;
+        muteEventSeenRef.current = true;
+
+        if (cleanupOnMuteEventRef.current) {
+          cleanupOnMuteEventRef.current = false;
+          unmuteIfNeeded();
+        }
       });
 
       unlistenDown = await listen('shortcut-down', async () => {
-        if (pillStateRef.current === 'listening') return; // Prevent key repeat from resetting the timer
+        if (pillStateRef.current !== 'hidden') {
+          cleanupNativeCapture();
+          return;
+        }
+
+        didMute = false;
+        didMuteRef.current = false;
+        muteEventSeenRef.current = false;
+        cleanupOnMuteEventRef.current = false;
         
         const apiKey = useAppStore.getState().apiKey;
 
         if (!apiKey) {
+          cleanupNativeCapture();
           setPillState('error');
           setStatusMsg('API Key missing - set it in Settings');
           setTextKey(k => k + 1);
@@ -232,7 +266,12 @@ export function PillView() {
         setStatusMsg('Transcribing...');
         setTextKey(k => k + 1);
 
+        if (!muteEventSeenRef.current) {
+          cleanupOnMuteEventRef.current = true;
+        }
         invoke('unmute_system', { didMute }).catch(() => {});
+        didMute = false;
+        didMuteRef.current = false;
 
         try {
           const base64Audio: string = await invoke('stop_recording');
