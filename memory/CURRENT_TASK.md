@@ -38,4 +38,6 @@ Fix microphone showing as "in use" when app is idle, optimize application perfor
 
 ## Last updated
 2026-05-22 — Completed the performance, reliability, and statistics overhaul (v0.0.12). Addressed tab transition slowness by shortening the Tailwind fade-in duration to 100ms, minimizing translation offset, and accelerating sidebar button transitions to 100ms. All features implemented, verified to build cleanly, and dev server runs successfully. Task is complete.
+2026-05-22 — Designed, developed, and integrated a premium animated SVG banner demonstrating the VoxDrop dictation workflow (Global Hotkey Trigger -> Listening Pill -> AI Text Typing & Auto-Paste) and pushed it to main.
+
 

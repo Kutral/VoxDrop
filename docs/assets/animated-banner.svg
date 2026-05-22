@@ -84,8 +84,8 @@
     </clipPath>
   </defs>
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap');
+  <style><![CDATA[
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
     /* BASE STYLE RESET */
     text {
@@ -277,7 +277,7 @@
     .decor-symbol { animation: floatDecor 6s infinite ease-in-out; }
     .dec-1 { animation-delay: 0.5s; }
     .dec-2 { animation-delay: 2s; }
-  </style>
+  ]]></style>
 
   <!-- Solid Premium Background -->
   <rect width="1200" height="480" rx="24" fill="#04060b"/>
