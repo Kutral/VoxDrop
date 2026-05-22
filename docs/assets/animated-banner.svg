@@ -85,8 +85,6 @@
   </defs>
 
   <style><![CDATA[
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
     /* BASE STYLE RESET */
     text {
       user-select: none;
@@ -301,7 +299,7 @@
     <rect x="70" y="110" width="270" height="260" rx="20" fill="#0b1324" fill-opacity="0.6" stroke="#1e293b" stroke-width="1.5"/>
     
     <!-- Panel Header Tag -->
-    <text x="100" y="146" fill="#64748b" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="1.5">GLOBAL SHORTCUT</text>
+    <text x="100" y="146" fill="#64748b" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="700" letter-spacing="1.5">GLOBAL SHORTCUT</text>
 
     <!-- Keypress Ripple (Behind keys) -->
     <circle cx="205" cy="211" r="95" fill="none" stroke="#0ea5e9" stroke-width="1.5" class="ripple"/>
@@ -312,7 +310,7 @@
     <!-- Keycap (animates) -->
     <g class="key-cap ctrl-key">
       <rect x="100" y="174" width="90" height="68" rx="12" fill="url(#key-gradient)" stroke="url(#key-border)" stroke-width="1.5" class="key-glow-path ctrl-glow"/>
-      <text x="145" y="214" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="16" font-weight="700" text-anchor="middle">Ctrl</text>
+      <text x="145" y="214" fill="#f8fafc" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" text-anchor="middle">Ctrl</text>
     </g>
 
     <!-- Key 2: Win -->
@@ -323,17 +321,17 @@
       <rect x="205" y="174" width="90" height="68" rx="12" fill="url(#key-gradient)" stroke="url(#key-border)" stroke-width="1.5" class="key-glow-path win-glow"/>
       <!-- Stylized Windows Icon -->
       <path d="M 230 203 L 239.5 201.7 L 239.5 209.5 L 230 209.5 Z M 230 211 L 239.5 211 L 239.5 218.8 L 230 217.5 Z M 241 201.5 L 253 199.8 L 253 209.5 L 241 209.5 Z M 241 211 L 253 211 L 253 220.7 L 241 219 Z" fill="#f8fafc"/>
-      <text x="250" y="235" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" text-anchor="middle">Win</text>
+      <text x="250" y="235" fill="#f8fafc" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" text-anchor="middle">Win</text>
     </g>
 
     <!-- Instruction Label -->
-    <text x="205" y="295" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Press &amp; Hold Hotkey</text>
+    <text x="205" y="295" fill="#475569" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Press &amp; Hold Hotkey</text>
     
     <!-- Active Indicator -->
     <g class="pill-contents-active">
       <rect x="135" y="315" width="140" height="22" rx="11" fill="#0369a1" fill-opacity="0.2" stroke="#0ea5e9" stroke-width="1"/>
       <circle cx="155" cy="326" r="3.5" fill="#38bdf8"/>
-      <text x="165" y="330" fill="#38bdf8" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="0.5">RECORDING ACTIVE</text>
+      <text x="165" y="330" fill="#38bdf8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="700" letter-spacing="0.5">RECORDING ACTIVE</text>
     </g>
   </g>
 
@@ -356,7 +354,7 @@
       <circle cx="440" cy="356" r="4.5" fill="#475569"/>
       <rect x="454" y="352" width="16" height="8" rx="2" fill="#475569"/>
       <rect x="476" y="352" width="12" height="8" rx="2" fill="#475569"/>
-      <text x="756" y="360" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="600" text-anchor="end">18:05</text>
+      <text x="756" y="360" fill="#475569" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="600" text-anchor="end">18:05</text>
       
       <!-- Floating Listening Pill -->
       <rect x="455" y="210" width="290" height="56" rx="28" fill="#090d16" fill-opacity="0.88" stroke="url(#pill-border-grad)" stroke-width="2" class="listening-pill"/>
@@ -382,25 +380,25 @@
         <rect x="560" y="232" width="3.5" height="12" rx="1.75" fill="#f472b6" class="wave-bar w-bar-7"/>
         
         <!-- Timer -->
-        <text x="602" y="242" fill="#94a3b8" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="600" text-anchor="middle">0:04</text>
+        <text x="602" y="242" fill="#94a3b8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="600" text-anchor="middle">0:04</text>
         
         <!-- Separator -->
         <line x1="632" y1="223" x2="632" y2="253" stroke="#1e293b" stroke-width="1.5"/>
         
         <!-- REC Status Dot + Tag -->
         <circle cx="658" cy="238" r="4.5" fill="#ef4444" class="rec-dot"/>
-        <text x="670" y="242" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="800" letter-spacing="0.5">REC</text>
+        <text x="670" y="242" fill="#f8fafc" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="800" letter-spacing="0.5">REC</text>
       </g>
 
       <!-- Pill Idle Content (when not active) -->
       <!-- We have a simple prompt inside -->
       <g opacity="0.35" class="listening-pill">
-        <text x="600" y="242" fill="#64748b" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" text-anchor="middle">VOXDROP PILL (IDLE)</text>
+        <text x="600" y="242" fill="#64748b" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" text-anchor="middle">VOXDROP PILL (IDLE)</text>
       </g>
     </g>
 
     <!-- Context Text under Desktop -->
-    <text x="600" y="395" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Summoned Pill Window listens</text>
+    <text x="600" y="395" fill="#475569" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Summoned Pill Window listens</text>
   </g>
 
   <!-- ==================== FLOW LINE 2 (PILL -> EDITOR) ==================== -->
@@ -417,29 +415,28 @@
     <circle cx="890" cy="132" r="5" fill="#eab308"/>
     <circle cx="905" cy="132" r="5" fill="#22c55e"/>
     
-    <text x="1000" y="136" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="1.2" text-anchor="middle">ACTIVE EDITOR</text>
+    <text x="1000" y="136" fill="#475569" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10" font-weight="700" letter-spacing="1.2" text-anchor="middle">ACTIVE EDITOR</text>
     <line x1="850" y1="150" x2="1130" y2="150" stroke="#1e293b" stroke-width="1.5"/>
 
     <!-- Transcription Badge (Active when processing) -->
     <g class="badge-transcribing">
       <rect x="870" y="166" width="98" height="20" rx="10" fill="#701a75" fill-opacity="0.3" stroke="#d946ef" stroke-width="1"/>
       <circle cx="882" cy="176" r="3" fill="#d946ef" class="rec-dot"/>
-      <text x="892" y="180" fill="#d946ef" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">TRANSCRIBING</text>
+      <text x="892" y="180" fill="#d946ef" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">TRANSCRIBING</text>
     </g>
 
     <!-- Paste Success Badge (Active when pasted) -->
     <g class="badge-pasted">
       <rect x="870" y="166" width="76" height="20" rx="10" fill="#064e3b" fill-opacity="0.3" stroke="#10b981" stroke-width="1"/>
       <circle cx="882" cy="176" r="3" fill="#10b981"/>
-      <text x="892" y="180" fill="#10b981" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">PASTED ✨</text>
+      <text x="892" y="180" fill="#10b981" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">PASTED ✨</text>
     </g>
 
     <!-- Document Info Mock -->
-    <text x="870" y="210" fill="#475569" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">&gt; Focused: Text Area</text>
+    <text x="870" y="210" fill="#475569" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="12" font-weight="500">&gt; Focused: Text Area</text>
     
     <!-- Pasted Text Output (Typed letter by letter / word by word) -->
-    <!-- Font-size: 13px, Monospaced. Total length is ~43 chars. Average width 7.8px/char. -->
-    <text x="870" y="244" fill="#a5b4fc" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700" class="pasted-text">
+    <text x="870" y="244" fill="#a5b4fc" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="700" class="pasted-text">
       <tspan class="wr1">VoxDrop </tspan>
       <tspan class="wr2">makes </tspan>
       <tspan class="wr3">dictation </tspan>
@@ -452,18 +449,18 @@
     <!-- Blinking Text Editor Cursor -->
     <line x1="870" y1="230" x2="870" y2="247" stroke="#38bdf8" stroke-width="2" class="cursor"/>
 
-    <text x="990" y="295" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Polished text auto-pastes</text>
+    <text x="990" y="295" fill="#475569" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Polished text auto-pastes</text>
   </g>
 
   <!-- ==================== DECORATIVE FLOATING SYMBOLS ==================== -->
   <!-- Curly brace near editor -->
   <g class="decor-symbol dec-1" transform="translate(1070, 75)">
     <rect x="0" y="0" width="30" height="30" rx="8" fill="#1e1b4b" fill-opacity="0.4" stroke="#4c1d95" stroke-width="1"/>
-    <text x="15" y="20" fill="#a855f7" font-family="'JetBrains Mono', monospace" font-size="14" font-weight="700" text-anchor="middle">{ }</text>
+    <text x="15" y="20" fill="#a855f7" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="14" font-weight="700" text-anchor="middle">{ }</text>
   </g>
   <!-- Mic badge near shortcut -->
   <g class="decor-symbol dec-2" transform="translate(45, 340)">
     <rect x="0" y="0" width="30" height="30" rx="8" fill="#082f49" fill-opacity="0.4" stroke="#0369a1" stroke-width="1"/>
-    <text x="15" y="20" fill="#0ea5e9" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" text-anchor="middle">🎙️</text>
+    <text x="15" y="20" fill="#0ea5e9" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" text-anchor="middle">🎙️</text>
   </g>
 </svg>
