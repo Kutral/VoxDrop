@@ -1,0 +1,469 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" width="100%" height="100%">
+  <defs>
+    <!-- Background Radial Gradients for Mesh Glow -->
+    <radialGradient id="indigo-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violet-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="fuchsia-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d946ef" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#d946ef" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Grid Fade Gradient -->
+    <radialGradient id="grid-fade-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8"/>
+      <stop offset="70%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Grid Pattern -->
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#38bdf8" stroke-width="0.8" stroke-opacity="0.12"/>
+    </pattern>
+
+    <!-- Keyboard Key Cap Gradient -->
+    <linearGradient id="key-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="key-border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Mock Desktop Background Gradient -->
+    <linearGradient id="desktop-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1329"/>
+      <stop offset="50%" stop-color="#070a14"/>
+      <stop offset="100%" stop-color="#110c22"/>
+    </linearGradient>
+
+    <!-- Listening Pill Border & Inner Gradients -->
+    <linearGradient id="pill-border-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="50%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+
+    <!-- Editor Window Border -->
+    <linearGradient id="editor-border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95"/>
+      <stop offset="50%" stop-color="#2e1065"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Flow Gradients -->
+    <linearGradient id="flow-grad-1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="flow-grad-2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+
+    <!-- Glassmorphism Filter (for drop shadow + blur UI effect) -->
+    <filter id="glass-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#020617" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Soft Glow Filter -->
+    <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Desktop Clipping Path -->
+    <clipPath id="desktop-clip">
+      <rect x="420" y="110" width="360" height="260" rx="20"/>
+    </clipPath>
+  </defs>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap');
+
+    /* BASE STYLE RESET */
+    text {
+      user-select: none;
+    }
+
+    /* MASTER ANIMATION LOOP (9 seconds total) */
+    /* 0.0s - 1.8s: Hotkey triggered (Keys press down, ripple activates) */
+    /* 1.5s - 5.0s: Listening Pill Active (Soundwaves dance, timer counts, REC pulses) */
+    /* 4.8s - 8.2s: Typing paste in Editor (Text reveals word-by-word, cursor moves) */
+    /* 8.2s - 9.0s: Pause & Reset */
+
+    /* 1. Ambient Glow Pulsing */
+    @keyframes ambientPulse {
+      0%, 100% { transform: scale(1) translate(0px, 0px); opacity: 0.6; }
+      33% { transform: scale(1.15) translate(30px, -20px); opacity: 0.75; }
+      66% { transform: scale(0.9) translate(-20px, 20px); opacity: 0.45; }
+    }
+    .glow-indigo { animation: ambientPulse 14s infinite ease-in-out; transform-origin: 200px 240px; }
+    .glow-violet { animation: ambientPulse 18s infinite ease-in-out; transform-origin: 950px 200px; }
+    .glow-fuchsia { animation: ambientPulse 12s infinite ease-in-out; transform-origin: 600px 240px; }
+
+    /* 2. Keyboard Keypress Anim */
+    @keyframes keyPress {
+      0%, 2% { transform: translateY(0); }
+      4%, 18% { transform: translateY(4px); }
+      20%, 100% { transform: translateY(0); }
+    }
+    @keyframes keyGlow {
+      0%, 2% { stroke: #475569; fill: #1e293b; filter: none; }
+      4%, 18% { stroke: #38bdf8; fill: #1d4ed8; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.5)); }
+      20%, 100% { stroke: #475569; fill: #1e293b; filter: none; }
+    }
+    .key-cap { animation: keyPress 9s infinite cubic-bezier(0.25, 1, 0.5, 1); }
+    .ctrl-key { animation-delay: 0s; }
+    .win-key { animation-delay: 0.08s; }
+    .key-glow-path { animation: keyGlow 9s infinite ease-in-out; }
+    .ctrl-glow { animation-delay: 0s; }
+    .win-glow { animation-delay: 0.08s; }
+
+    /* 3. Ripple Effect */
+    @keyframes rippleEffect {
+      0% { transform: scale(0.6); opacity: 0; }
+      4% { opacity: 0.8; }
+      16% { transform: scale(1.5); opacity: 0; }
+      100% { transform: scale(0.6); opacity: 0; }
+    }
+    .ripple {
+      animation: rippleEffect 9s infinite cubic-bezier(0.1, 0.8, 0.3, 1);
+      transform-origin: 205px 211px;
+    }
+
+    /* 4. Flow line 1 (Keys to Pill) */
+    @keyframes flow1 {
+      0%, 3% { stroke-dashoffset: 80; opacity: 0; }
+      5%, 22% { opacity: 0.9; stroke-dashoffset: 0; }
+      25%, 100% { stroke-dashoffset: -80; opacity: 0; }
+    }
+    .flow-line-1 {
+      stroke-dasharray: 10, 10;
+      animation: flow1 9s infinite linear;
+    }
+
+    /* 5. Listening Pill Active */
+    @keyframes pillActive {
+      0%, 13% { opacity: 0.35; filter: drop-shadow(0 0 2px rgba(14, 165, 233, 0.1)); }
+      16%, 50% { opacity: 1; filter: drop-shadow(0 0 25px rgba(14, 165, 233, 0.45)); }
+      53%, 100% { opacity: 0.35; filter: drop-shadow(0 0 2px rgba(14, 165, 233, 0.1)); }
+    }
+    .listening-pill {
+      animation: pillActive 9s infinite ease-in-out;
+    }
+
+    @keyframes contentsVisibility {
+      0%, 14% { opacity: 0; transform: scale(0.97); }
+      16%, 50% { opacity: 1; transform: scale(1); }
+      52%, 100% { opacity: 0; transform: scale(0.97); }
+    }
+    .pill-contents-active {
+      animation: contentsVisibility 9s infinite ease-in-out;
+      transform-origin: 600px 238px;
+    }
+
+    /* Soundwave Dancer */
+    @keyframes waveDanceA { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1.3); } }
+    @keyframes waveDanceB { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(0.95); } }
+    @keyframes waveDanceC { 0%, 100% { transform: scaleY(0.2); } 50% { transform: scaleY(1.5); } }
+    @keyframes waveDanceD { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1.1); } }
+    @keyframes waveDanceE { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(0.8); } }
+
+    .wave-bar { transform-origin: 238px; }
+    .w-bar-1 { animation: waveDanceA 0.9s infinite ease-in-out; }
+    .w-bar-2 { animation: waveDanceB 1.1s infinite ease-in-out; }
+    .w-bar-3 { animation: waveDanceC 0.75s infinite ease-in-out; }
+    .w-bar-4 { animation: waveDanceD 1.2s infinite ease-in-out; }
+    .w-bar-5 { animation: waveDanceE 0.85s infinite ease-in-out; }
+    .w-bar-6 { animation: waveDanceB 0.95s infinite ease-in-out; }
+    .w-bar-7 { animation: waveDanceA 1.05s infinite ease-in-out; }
+
+    @keyframes recPulse {
+      0%, 100% { opacity: 0.5; transform: scale(0.95); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+    .rec-dot {
+      animation: recPulse 1.2s infinite ease-in-out;
+      transform-origin: 685px 238px;
+    }
+
+    /* 6. Flow line 2 (Pill to Editor) */
+    @keyframes flow2 {
+      0%, 48% { stroke-dashoffset: 80; opacity: 0; }
+      50%, 65% { opacity: 0.9; stroke-dashoffset: 0; }
+      68%, 100% { stroke-dashoffset: -80; opacity: 0; }
+    }
+    .flow-line-2 {
+      stroke-dasharray: 10, 10;
+      animation: flow2 9s infinite linear;
+    }
+
+    /* 7. Editor Window Active */
+    @keyframes editorActive {
+      0%, 47% { opacity: 0.55; filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.1)); }
+      50%, 84% { opacity: 1; filter: drop-shadow(0 0 25px rgba(168, 85, 247, 0.35)); }
+      87%, 100% { opacity: 0.55; filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.1)); }
+    }
+    .editor-window {
+      animation: editorActive 9s infinite ease-in-out;
+    }
+
+    /* Status Badges */
+    @keyframes showTranscribing {
+      0%, 49% { opacity: 0; }
+      51%, 63% { opacity: 1; }
+      65%, 100% { opacity: 0; }
+    }
+    .badge-transcribing { animation: showTranscribing 9s infinite ease-in-out; }
+
+    @keyframes showPasted {
+      0%, 63% { opacity: 0; }
+      65%, 84% { opacity: 1; }
+      86%, 100% { opacity: 0; }
+    }
+    .badge-pasted { animation: showPasted 9s infinite ease-in-out; }
+
+    /* 8. Text Word-by-Word Reveal */
+    @keyframes wordReveal {
+      0%, 63% { opacity: 0; transform: translateY(3px); }
+      65%, 84% { opacity: 1; transform: translateY(0); }
+      86%, 100% { opacity: 0; }
+    }
+    .pasted-text tspan {
+      display: inline-block;
+      opacity: 0;
+      animation: wordReveal 9s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .wr1 { animation-delay: 0s; }
+    .wr2 { animation-delay: 0.12s; }
+    .wr3 { animation-delay: 0.24s; }
+    .wr4 { animation-delay: 0.36s; }
+    .wr5 { animation-delay: 0.48s; }
+    .wr6 { animation-delay: 0.6s; }
+    .wr7 { animation-delay: 0.72s; }
+
+    /* Cursor Blink and Step Motion */
+    @keyframes cursorBlink {
+      50% { opacity: 0; }
+    }
+    @keyframes cursorMove {
+      0%, 63% { transform: translateX(0); opacity: 1; }
+      65% { transform: translateX(0); }
+      66.2% { transform: translateX(62px); }
+      67.4% { transform: translateX(108px); }
+      68.6% { transform: translateX(185px); }
+      69.8% { transform: translateX(224px); }
+      71.0% { transform: translateX(262px); }
+      72.2% { transform: translateX(316px); }
+      73.4%, 84% { transform: translateX(332px); opacity: 1; }
+      86%, 100% { transform: translateX(0); opacity: 0; }
+    }
+    .cursor {
+      animation: cursorBlink 0.8s infinite, cursorMove 9s infinite cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    /* Floating code symbol decor */
+    @keyframes floatDecor {
+      0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.25; }
+      50% { transform: translateY(-8px) rotate(5deg); opacity: 0.45; }
+    }
+    .decor-symbol { animation: floatDecor 6s infinite ease-in-out; }
+    .dec-1 { animation-delay: 0.5s; }
+    .dec-2 { animation-delay: 2s; }
+  </style>
+
+  <!-- Solid Premium Background -->
+  <rect width="1200" height="480" rx="24" fill="#04060b"/>
+
+  <!-- Glowing Mesh Background -->
+  <g filter="url(#soft-glow)">
+    <circle cx="200" cy="240" r="220" fill="url(#indigo-glow)" class="glow-indigo"/>
+    <circle cx="1000" cy="200" r="240" fill="url(#violet-glow)" class="glow-violet"/>
+    <circle cx="600" cy="260" r="180" fill="url(#fuchsia-glow)" class="glow-fuchsia"/>
+  </g>
+
+  <!-- Faded Technical Grid -->
+  <rect width="1200" height="480" fill="url(#grid)" mask="url(#grid-fade-grad)" rx="24"/>
+
+  <!-- Container Outline -->
+  <rect width="1198" height="478" x="1" y="1" rx="23" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- ==================== LEFT: TRIGGER HOTKEY ==================== -->
+  <g filter="url(#glass-shadow)">
+    <!-- Glass Panel Background -->
+    <rect x="70" y="110" width="270" height="260" rx="20" fill="#0b1324" fill-opacity="0.6" stroke="#1e293b" stroke-width="1.5"/>
+    
+    <!-- Panel Header Tag -->
+    <text x="100" y="146" fill="#64748b" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="1.5">GLOBAL SHORTCUT</text>
+
+    <!-- Keypress Ripple (Behind keys) -->
+    <circle cx="205" cy="211" r="95" fill="none" stroke="#0ea5e9" stroke-width="1.5" class="ripple"/>
+
+    <!-- Key 1: Ctrl -->
+    <!-- Base -->
+    <rect x="100" y="180" width="90" height="68" rx="12" fill="#090d16" stroke="#1e293b" stroke-width="1"/>
+    <!-- Keycap (animates) -->
+    <g class="key-cap ctrl-key">
+      <rect x="100" y="174" width="90" height="68" rx="12" fill="url(#key-gradient)" stroke="url(#key-border)" stroke-width="1.5" class="key-glow-path ctrl-glow"/>
+      <text x="145" y="214" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="16" font-weight="700" text-anchor="middle">Ctrl</text>
+    </g>
+
+    <!-- Key 2: Win -->
+    <!-- Base -->
+    <rect x="205" y="180" width="90" height="68" rx="12" fill="#090d16" stroke="#1e293b" stroke-width="1"/>
+    <!-- Keycap (animates) -->
+    <g class="key-cap win-key">
+      <rect x="205" y="174" width="90" height="68" rx="12" fill="url(#key-gradient)" stroke="url(#key-border)" stroke-width="1.5" class="key-glow-path win-glow"/>
+      <!-- Stylized Windows Icon -->
+      <path d="M 230 203 L 239.5 201.7 L 239.5 209.5 L 230 209.5 Z M 230 211 L 239.5 211 L 239.5 218.8 L 230 217.5 Z M 241 201.5 L 253 199.8 L 253 209.5 L 241 209.5 Z M 241 211 L 253 211 L 253 220.7 L 241 219 Z" fill="#f8fafc"/>
+      <text x="250" y="235" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" text-anchor="middle">Win</text>
+    </g>
+
+    <!-- Instruction Label -->
+    <text x="205" y="295" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Press &amp; Hold Hotkey</text>
+    
+    <!-- Active Indicator -->
+    <g class="pill-contents-active">
+      <rect x="135" y="315" width="140" height="22" rx="11" fill="#0369a1" fill-opacity="0.2" stroke="#0ea5e9" stroke-width="1"/>
+      <circle cx="155" cy="326" r="3.5" fill="#38bdf8"/>
+      <text x="165" y="330" fill="#38bdf8" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="0.5">RECORDING ACTIVE</text>
+    </g>
+  </g>
+
+  <!-- ==================== FLOW LINE 1 (KEYBOARD -> PILL) ==================== -->
+  <path d="M 340 240 Q 380 240 420 238" fill="none" stroke="#1e293b" stroke-width="2"/>
+  <path d="M 340 240 Q 380 240 420 238" fill="none" stroke="url(#flow-grad-1)" stroke-width="2" class="flow-line-1"/>
+
+  <!-- ==================== CENTER: LISTENING PILL ==================== -->
+  <!-- Screen/Desktop Container -->
+  <g filter="url(#glass-shadow)">
+    <rect x="420" y="110" width="360" height="260" rx="20" fill="#070a13" fill-opacity="0.8" stroke="#1e293b" stroke-width="1.5"/>
+    
+    <!-- Desktop Mockup (Clipped to boundary) -->
+    <g clip-path="url(#desktop-clip)">
+      <rect x="420" y="110" width="360" height="260" fill="url(#desktop-bg)"/>
+      <circle cx="600" cy="240" r="90" fill="#4f46e5" fill-opacity="0.25" filter="url(#soft-glow)"/>
+      
+      <!-- Mock Taskbar -->
+      <rect x="420" y="342" width="360" height="28" fill="#080b11" fill-opacity="0.9" stroke="#161e2e" stroke-width="0.5"/>
+      <circle cx="440" cy="356" r="4.5" fill="#475569"/>
+      <rect x="454" y="352" width="16" height="8" rx="2" fill="#475569"/>
+      <rect x="476" y="352" width="12" height="8" rx="2" fill="#475569"/>
+      <text x="756" y="360" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="600" text-anchor="end">18:05</text>
+      
+      <!-- Floating Listening Pill -->
+      <rect x="455" y="210" width="290" height="56" rx="28" fill="#090d16" fill-opacity="0.88" stroke="url(#pill-border-grad)" stroke-width="2" class="listening-pill"/>
+      
+      <!-- Pill Active Contents (Synced to loop) -->
+      <g class="pill-contents-active">
+        <!-- Microphone Icon -->
+        <g transform="translate(10, 0)">
+          <path d="M472,223 C468.7,223 466,225.7 466,229 L466,237 C466,240.3 468.7,243 472,243 C475.3,243 478,240.3 478,237 L478,229 C478,225.7 475.3,223 472,223 Z" fill="none" stroke="#38bdf8" stroke-width="2"/>
+          <path d="M462,234 L462,237 C462,242.5 472,248 472,248 C472,248 482,242.5 482,237 L482,234" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+          <path d="M472,248 L472,252" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+          <path d="M466,252 L478,252" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        
+        <!-- Waveform visualizer bars -->
+        <!-- Center line y=238. Initial height and y coordinates placed symmetrically around y=238 -->
+        <rect x="506" y="231" width="3.5" height="14" rx="1.75" fill="#38bdf8" class="wave-bar w-bar-1"/>
+        <rect x="515" y="225" width="3.5" height="26" rx="1.75" fill="#0ea5e9" class="wave-bar w-bar-2"/>
+        <rect x="524" y="219" width="3.5" height="38" rx="1.75" fill="#6366f1" class="wave-bar w-bar-3"/>
+        <rect x="533" y="226" width="3.5" height="24" rx="1.75" fill="#818cf8" class="wave-bar w-bar-4"/>
+        <rect x="542" y="221" width="3.5" height="34" rx="1.75" fill="#a855f7" class="wave-bar w-bar-5"/>
+        <rect x="551" y="227" width="3.5" height="22" rx="1.75" fill="#c084fc" class="wave-bar w-bar-6"/>
+        <rect x="560" y="232" width="3.5" height="12" rx="1.75" fill="#f472b6" class="wave-bar w-bar-7"/>
+        
+        <!-- Timer -->
+        <text x="602" y="242" fill="#94a3b8" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="600" text-anchor="middle">0:04</text>
+        
+        <!-- Separator -->
+        <line x1="632" y1="223" x2="632" y2="253" stroke="#1e293b" stroke-width="1.5"/>
+        
+        <!-- REC Status Dot + Tag -->
+        <circle cx="658" cy="238" r="4.5" fill="#ef4444" class="rec-dot"/>
+        <text x="670" y="242" fill="#f8fafc" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="800" letter-spacing="0.5">REC</text>
+      </g>
+
+      <!-- Pill Idle Content (when not active) -->
+      <!-- We have a simple prompt inside -->
+      <g opacity="0.35" class="listening-pill">
+        <text x="600" y="242" fill="#64748b" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" text-anchor="middle">VOXDROP PILL (IDLE)</text>
+      </g>
+    </g>
+
+    <!-- Context Text under Desktop -->
+    <text x="600" y="395" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Summoned Pill Window listens</text>
+  </g>
+
+  <!-- ==================== FLOW LINE 2 (PILL -> EDITOR) ==================== -->
+  <path d="M 780 238 Q 815 238 850 240" fill="none" stroke="#1e293b" stroke-width="2"/>
+  <path d="M 780 238 Q 815 238 850 240" fill="none" stroke="url(#flow-grad-2)" stroke-width="2" class="flow-line-2"/>
+
+  <!-- ==================== RIGHT: TARGET EDITOR ==================== -->
+  <g filter="url(#glass-shadow)">
+    <!-- Glass Panel Background -->
+    <rect x="850" y="110" width="280" height="260" rx="20" fill="#0b1324" fill-opacity="0.6" stroke="url(#editor-border)" stroke-width="1.5" class="editor-window"/>
+    
+    <!-- Window Control Buttons (Mocking active focus) -->
+    <circle cx="875" cy="132" r="5" fill="#ef4444"/>
+    <circle cx="890" cy="132" r="5" fill="#eab308"/>
+    <circle cx="905" cy="132" r="5" fill="#22c55e"/>
+    
+    <text x="1000" y="136" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" letter-spacing="1.2" text-anchor="middle">ACTIVE EDITOR</text>
+    <line x1="850" y1="150" x2="1130" y2="150" stroke="#1e293b" stroke-width="1.5"/>
+
+    <!-- Transcription Badge (Active when processing) -->
+    <g class="badge-transcribing">
+      <rect x="870" y="166" width="98" height="20" rx="10" fill="#701a75" fill-opacity="0.3" stroke="#d946ef" stroke-width="1"/>
+      <circle cx="882" cy="176" r="3" fill="#d946ef" class="rec-dot"/>
+      <text x="892" y="180" fill="#d946ef" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">TRANSCRIBING</text>
+    </g>
+
+    <!-- Paste Success Badge (Active when pasted) -->
+    <g class="badge-pasted">
+      <rect x="870" y="166" width="76" height="20" rx="10" fill="#064e3b" fill-opacity="0.3" stroke="#10b981" stroke-width="1"/>
+      <circle cx="882" cy="176" r="3" fill="#10b981"/>
+      <text x="892" y="180" fill="#10b981" font-family="'Plus Jakarta Sans', sans-serif" font-size="9" font-weight="800" letter-spacing="0.5">PASTED ✨</text>
+    </g>
+
+    <!-- Document Info Mock -->
+    <text x="870" y="210" fill="#475569" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500">&gt; Focused: Text Area</text>
+    
+    <!-- Pasted Text Output (Typed letter by letter / word by word) -->
+    <!-- Font-size: 13px, Monospaced. Total length is ~43 chars. Average width 7.8px/char. -->
+    <text x="870" y="244" fill="#a5b4fc" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="700" class="pasted-text">
+      <tspan class="wr1">VoxDrop </tspan>
+      <tspan class="wr2">makes </tspan>
+      <tspan class="wr3">dictation </tspan>
+      <tspan class="wr4">feel </tspan>
+      <tspan class="wr5">like </tspan>
+      <tspan class="wr6">magic! </tspan>
+      <tspan class="wr7">✨</tspan>
+    </text>
+
+    <!-- Blinking Text Editor Cursor -->
+    <line x1="870" y1="230" x2="870" y2="247" stroke="#38bdf8" stroke-width="2" class="cursor"/>
+
+    <text x="990" y="295" fill="#475569" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" text-anchor="middle">Polished text auto-pastes</text>
+  </g>
+
+  <!-- ==================== DECORATIVE FLOATING SYMBOLS ==================== -->
+  <!-- Curly brace near editor -->
+  <g class="decor-symbol dec-1" transform="translate(1070, 75)">
+    <rect x="0" y="0" width="30" height="30" rx="8" fill="#1e1b4b" fill-opacity="0.4" stroke="#4c1d95" stroke-width="1"/>
+    <text x="15" y="20" fill="#a855f7" font-family="'JetBrains Mono', monospace" font-size="14" font-weight="700" text-anchor="middle">{ }</text>
+  </g>
+  <!-- Mic badge near shortcut -->
+  <g class="decor-symbol dec-2" transform="translate(45, 340)">
+    <rect x="0" y="0" width="30" height="30" rx="8" fill="#082f49" fill-opacity="0.4" stroke="#0369a1" stroke-width="1"/>
+    <text x="15" y="20" fill="#0ea5e9" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" text-anchor="middle">🎙️</text>
+  </g>
+</svg>
