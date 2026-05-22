@@ -167,6 +167,16 @@
       transform-origin: 600px 238px;
     }
 
+    @keyframes idleVisibility {
+      0%, 13% { opacity: 0.35; transform: scale(1); }
+      16%, 50% { opacity: 0; transform: scale(0.97); }
+      53%, 100% { opacity: 0.35; transform: scale(1); }
+    }
+    .pill-contents-idle {
+      animation: idleVisibility 9s infinite ease-in-out;
+      transform-origin: 600px 238px;
+    }
+
     /* Soundwave Dancer */
     @keyframes waveDanceA { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1.3); } }
     @keyframes waveDanceB { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(0.95); } }
@@ -391,7 +401,7 @@
 
       <!-- Pill Idle Content (when not active) -->
       <!-- We have a simple prompt inside -->
-      <g opacity="0.35" class="listening-pill">
+      <g class="pill-contents-idle">
         <text x="600" y="242" fill="#64748b" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" letter-spacing="0.5" text-anchor="middle">VOXDROP PILL (IDLE)</text>
       </g>
     </g>

@@ -19,7 +19,7 @@
 <hr/>
 
 <p align="center">
-  <img src="docs/assets/animated-banner.svg" alt="VoxDrop Dictation Workflow" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" />
+  <img src="docs/assets/animated-banner.svg?v=2" alt="VoxDrop Dictation Workflow" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" />
 </p>
 
 ## ✨ Why VoxDrop?
