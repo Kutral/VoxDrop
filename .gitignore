@@ -7,19 +7,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and Build Output
 node_modules
 dist
 dist-ssr
-*.local
-.env
-.env.*
-!.env.example
 src-tauri/target
 src-tauri/*.db
 src-tauri/*.db-*
 
-# Agents
+# Environment files
+*.local
+.env
+.env.*
+!.env.example
+
+# Agents (Local-Only)
 .agents/
+AGENTS.md
+GEMINI.md
+project.md
+memory/
 
 # Editor directories and files
 .vscode/
