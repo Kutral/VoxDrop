@@ -234,8 +234,7 @@
       65%, 84% { opacity: 1; transform: translateY(0); }
       86%, 100% { opacity: 0; }
     }
-    .pasted-text tspan {
-      display: inline-block;
+    .pasted-word {
       opacity: 0;
       animation: wordReveal 9s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -435,16 +434,15 @@
     <!-- Document Info Mock -->
     <text x="870" y="210" fill="#475569" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="12" font-weight="500">&gt; Focused: Text Area</text>
     
-    <!-- Pasted Text Output (Typed letter by letter / word by word) -->
-    <text x="870" y="244" fill="#a5b4fc" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="700" class="pasted-text">
-      <tspan class="wr1">VoxDrop </tspan>
-      <tspan class="wr2">makes </tspan>
-      <tspan class="wr3">dictation </tspan>
-      <tspan class="wr4">feel </tspan>
-      <tspan class="wr5">like </tspan>
-      <tspan class="wr6">magic! </tspan>
-      <tspan class="wr7">✨</tspan>
-    </text>
+    <g fill="#a5b4fc" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="13" font-weight="700">
+      <text x="870" y="244" class="pasted-word wr1">VoxDrop </text>
+      <text x="932" y="244" class="pasted-word wr2">makes </text>
+      <text x="978" y="244" class="pasted-word wr3">dictation </text>
+      <text x="1055" y="244" class="pasted-word wr4">feel </text>
+      <text x="1094" y="244" class="pasted-word wr5">like </text>
+      <text x="1132" y="244" class="pasted-word wr6">magic! </text>
+      <text x="1186" y="244" class="pasted-word wr7">✨</text>
+    </g>
 
     <!-- Blinking Text Editor Cursor -->
     <line x1="870" y1="230" x2="870" y2="247" stroke="#38bdf8" stroke-width="2" class="cursor"/>
