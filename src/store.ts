@@ -18,6 +18,13 @@ interface HistoryItem {
 const MAX_HISTORY_ITEMS = 100;
 export const DEFAULT_HOTKEY = 'Control+Super';
 
+export const getWeekIndex = (dateString: string) => {
+  const date = new Date(dateString);
+  const sunday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
+  const utcSunday = Date.UTC(sunday.getFullYear(), sunday.getMonth(), sunday.getDate());
+  return Math.round(utcSunday / (7 * 24 * 60 * 60 * 1000));
+};
+
 interface AppState {
   apiKey: string;
   whisperModel: string;
@@ -28,6 +35,9 @@ interface AppState {
   statusMessage: string;
   snippets: Snippet[];
   history: HistoryItem[];
+  activeWeeks: number[];
+  totalWordsAllTime: number;
+  totalDurationAllTime: number;
   
   setApiKey: (key: string) => void;
   setWhisperModel: (model: string) => void;
@@ -56,6 +66,9 @@ export const useAppStore = create<AppState>()(
       statusMessage: '',
       snippets: [],
       history: [],
+      activeWeeks: [],
+      totalWordsAllTime: 0,
+      totalDurationAllTime: 0,
 
       setApiKey: (key) => set({ apiKey: key }),
       setWhisperModel: (model) => set({ whisperModel: model }),
@@ -70,11 +83,38 @@ export const useAppStore = create<AppState>()(
         snippets: state.snippets.map(s => s.id === id ? { ...s, ...updatedSnippet } : s)
       })),
       removeSnippet: (id) => set((state) => ({ snippets: state.snippets.filter(s => s.id !== id) })),
-      setHistory: (history) => set({ history }),
+      setHistory: (history) => set(() => {
+        if (history.length === 0) {
+          return {
+            history,
+            activeWeeks: [],
+            totalWordsAllTime: 0,
+            totalDurationAllTime: 0
+          };
+        }
+        return { history };
+      }),
       addHistoryItem: (item) => set((state) => {
         const dedupedHistory = state.history.filter((entry) => entry.id !== item.id);
+        const itemWords = item.transcript.split(/\s+/).filter(w => w.length > 0).length;
+        const itemDuration = Number(item.duration_seconds) || 0;
+        const isNew = !state.history.some(h => h.id === item.id);
+
+        const newHistory = [item, ...dedupedHistory].slice(0, MAX_HISTORY_ITEMS);
+
+        let newActiveWeeks = state.activeWeeks || [];
+        if (isNew) {
+          const itemWeek = getWeekIndex(item.created_at);
+          if (!newActiveWeeks.includes(itemWeek)) {
+            newActiveWeeks = [...newActiveWeeks, itemWeek];
+          }
+        }
+
         return {
-          history: [item, ...dedupedHistory].slice(0, MAX_HISTORY_ITEMS),
+          history: newHistory,
+          activeWeeks: newActiveWeeks,
+          totalWordsAllTime: isNew ? (state.totalWordsAllTime || 0) + itemWords : (state.totalWordsAllTime || 0),
+          totalDurationAllTime: isNew ? (state.totalDurationAllTime || 0) + itemDuration : (state.totalDurationAllTime || 0),
         };
       }),
     }),
@@ -88,6 +128,9 @@ export const useAppStore = create<AppState>()(
         hotkey: state.hotkey,
         snippets: state.snippets,
         history: state.history,
+        activeWeeks: state.activeWeeks,
+        totalWordsAllTime: state.totalWordsAllTime,
+        totalDurationAllTime: state.totalDurationAllTime,
       }),
     }
   )

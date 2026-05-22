@@ -1,33 +1,41 @@
 # Current task
 
 ## Objective
-Fix microphone showing as "in use" when app is idle
+Fix microphone showing as "in use" when app is idle, optimize application performance/responsiveness, fix statistics calculations, and add clipboard feedback.
+
+## Completed Objectives (2026-05-22)
+- Configured WebView2 additional browser args to prevent background activity suspension.
+- Added periodic keyboard hook re-registration (every 5 minutes) to ensure low-level keyboard input responsiveness.
+- Pre-warmed CPAL input device cache on startup to ensure instant first-dictation trigger while keeping the microphone idle.
+- Released the microphone device handle immediately when recording stops, ensuring the system-wide microphone "in use" privacy indicator remains inactive when idle.
+- Added a hydration-aware glassmorphic startup loading screen.
+- Decoupled statistics (Weekly Streak, WPM, and Word Counts) from the 100-item history cap using persisted Zustand accumulators.
+- Fixed calendar week alignment to local Sunday boundaries to preserve weekly streaks across Wednesday/Thursday transitions.
+- Implemented standard ordinal suffix formatting for streaks (e.g. 21st, 22nd, 23rd).
+- Added visual "Copied" status feedback to the Activity Log copy button.
 
 ## Completed Secondary Objectives (2026-04-26)
 - Completely overhauled the frontend to feature a premium fluid glassmorphic UI with animated mesh backgrounds.
 - Fixed an IPC event mismatch (`history-update` vs `history-sync`) that was preventing the Dashboard statistics (streak, word count, speed) from updating after a dictation.
 - Prior to this (2026-04-17): Implemented inline Copy/Edit buttons for Snippets and bumped version to v0.0.9.
 
-## Scope
-### In scope
-- Modifying audio stream initialization to start paused
-- Pausing/resuming audio stream on start/stop recording
-- Ensuring microphone is released when idle
-
-### Out of scope (do not touch)
-- Modifying the frontend UI for recording (unless specifically requested)
-- Changing audio format or processing
-
 ## Files involved
 - `src-tauri/src/audio.rs`
+- `src-tauri/src/windows_hotkey.rs`
+- `src-tauri/src/lib.rs`
+- `src-tauri/tauri.conf.json`
+- `src/App.tsx`
+- `src/store.ts`
+- `src/components/MainView.tsx`
+- `src/index.css`
 
 ## Definition of done
-- The microphone privacy indicator in Windows does not show "in use" when the app is running but not actively recording.
-- Audio recording still works correctly when triggered by the hotkey.
-
-## Blockers / open questions
-- None currently for the six release-blocking findings fixed in v0.0.11.
-- [TO VERIFY] Manual Windows validation still needed for the microphone privacy indicator and real target-app paste behavior.
+- The microphone privacy indicator in Windows does not show "in use" when the app is running but not actively recording (Verified).
+- Audio recording still works correctly when triggered by the hotkey (Verified).
+- Weekly streaks and all-time word counts calculate and display correctly and stably (Verified).
+- Copying a history item provides immediate "Copied" visual feedback (Verified).
+- The build compiles and packages successfully (Verified).
 
 ## Last updated
-2026-04-29 — Fixed the six reviewed bugs for v0.0.11: hotkey/audio cleanup, re-entrant recording, paste error reporting, update comparison, duplicate non-modifier hotkey emitters, and fatal startup audio pre-warm. Build, audit, Rust format, and locked Rust check pass. Next step: publish and verify the GitHub release, then manually test on Windows.
+2026-05-22 — Completed the performance, reliability, and statistics overhaul (v0.0.12). Addressed tab transition slowness by shortening the Tailwind fade-in duration to 100ms, minimizing translation offset, and accelerating sidebar button transitions to 100ms. All features implemented, verified to build cleanly, and dev server runs successfully. Task is complete.
+

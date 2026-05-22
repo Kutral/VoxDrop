@@ -13,7 +13,7 @@ export default {
         pulse: "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         float: "float 6s ease-in-out infinite",
         'float-delayed': "float 6s ease-in-out 3s infinite",
-        'fade-in': 'fadeIn 0.5s ease-out forwards',
+        'fade-in': 'fadeIn 100ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'blob': 'blob 12s infinite alternate',
         'shimmer': 'shimmer 3s infinite linear',
       },
@@ -23,7 +23,7 @@ export default {
           '50%': { transform: 'translateY(-20px)' },
         },
         fadeIn: {
-          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '0%': { opacity: '0', transform: 'translateY(2px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         blob: {

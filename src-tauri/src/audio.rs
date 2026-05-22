@@ -224,12 +224,12 @@ pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<bool, Strin
 #[tauri::command]
 pub fn stop_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<String, String> {
     let (wav_data, spec) = {
-        let state_lock = state.lock().unwrap();
+        let mut state_lock = state.lock().unwrap();
         state_lock.is_recording.store(false, Ordering::SeqCst);
 
-        if let Some(ref stream) = state_lock.stream {
+        if let Some(stream) = state_lock.stream.take() {
             let _ = stream.0.pause();
-            eprintln!("[audio] Stream paused after recording");
+            eprintln!("[audio] Stream paused and dropped after recording");
         }
 
         let data = state_lock.wav_data.lock().unwrap().clone();

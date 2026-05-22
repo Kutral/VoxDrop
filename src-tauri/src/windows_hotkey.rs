@@ -149,18 +149,30 @@ mod imp {
 
         std::thread::spawn(move || unsafe {
             let module_handle: HINSTANCE = GetModuleHandleW(std::ptr::null());
-            let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
+            let mut hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
 
             if hook.is_null() {
                 return;
             }
 
             let timer_id = 1usize;
-            let timer_interval_ms = 60_000u32;
+            let timer_interval_ms = 30_000u32; // check every 30 seconds
             SetTimer(std::ptr::null_mut(), timer_id, timer_interval_ms, None);
 
+            const WM_TIMER: u32 = 0x0113;
             let mut message: MSG = std::mem::zeroed();
+            let mut last_reinstall = std::time::Instant::now();
+            let reinstall_interval = std::time::Duration::from_secs(300); // 5 minutes
+
             while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
+                if message.message == WM_TIMER {
+                    if last_reinstall.elapsed() >= reinstall_interval {
+                        let _ = UnhookWindowsHookEx(hook);
+                        hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
+                        last_reinstall = std::time::Instant::now();
+                        eprintln!("[hotkey] Periodically re-installed keyboard hook to prevent silent OS unhooking");
+                    }
+                }
                 TranslateMessage(&message);
                 DispatchMessageW(&message);
             }

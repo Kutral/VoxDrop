@@ -172,6 +172,18 @@ pub fn run() {
         update_hotkey(app.handle().clone(), DEFAULT_HOTKEY.to_string())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
+        // Pre-warm CPAL device enumeration cache on startup without opening a stream,
+        // so that the microphone indicator doesn't show "in use" when idle.
+        std::thread::spawn(move || {
+            use cpal::traits::{HostTrait, DeviceTrait};
+            let host = cpal::default_host();
+            if let Some(device) = host.default_input_device() {
+                if let Ok(name) = device.name() {
+                    eprintln!("[audio] Pre-warmed CPAL input device cache for: {}", name);
+                }
+            }
+        });
+
         if let Some(window) = app.get_webview_window("pill") {
             let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
                 x: -9999.0,

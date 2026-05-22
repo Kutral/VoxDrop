@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { DEFAULT_HOTKEY, useAppStore } from '../store';
+import { DEFAULT_HOTKEY, useAppStore, getWeekIndex } from '../store';
 import { testApiKey } from '../lib/groq';
 import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type ReleaseCheckResult } from '../lib/updates';
 import { listen, emit } from '@tauri-apps/api/event';
@@ -7,8 +7,42 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { LayoutDashboard, History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command, Plus, Trash2, Edit2, Copy, Check } from 'lucide-react';
 
+const getOrdinalSuffix = (num: number) => {
+  const j = num % 10;
+  const k = num % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+};
+
 export function MainView() {
   const [tab, setTab] = useState<'dashboard' | 'history' | 'snippets' | 'settings'>('dashboard');
+
+  // One-time migration for all-time statistics and active weeks
+  const history = useAppStore(state => state.history);
+  const activeWeeks = useAppStore(state => state.activeWeeks);
+  const totalWordsAllTime = useAppStore(state => state.totalWordsAllTime);
+
+  useEffect(() => {
+    if (history.length > 0 && (!activeWeeks || activeWeeks.length === 0 || totalWordsAllTime === 0)) {
+      let wordsAllTime = 0;
+      let durationAllTime = 0;
+      const weeks = Array.from(new Set(history.map(h => getWeekIndex(h.created_at))));
+      
+      history.forEach(item => {
+        const itemWords = item.transcript.split(/\s+/).filter(w => w.length > 0).length;
+        wordsAllTime += itemWords;
+        durationAllTime += (Number(item.duration_seconds) || 0);
+      });
+
+      useAppStore.setState({
+        activeWeeks: weeks,
+        totalWordsAllTime: wordsAllTime,
+        totalDurationAllTime: durationAllTime
+      });
+    }
+  }, [history, activeWeeks, totalWordsAllTime]);
 
   // Track settings changes and broadcast to pill window so it can rehydrate
   const { apiKey, whisperModel, llamaModel, snippets, hotkey } = useAppStore();
@@ -86,7 +120,7 @@ export function MainView() {
     return (
       <button
         onClick={() => setTab(id)}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-100 ${
           active
             ? 'bg-white/30 text-indigo-900 border border-white/60 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.03),inset_0_1px_0_rgba(255,255,255,0.5)]'
             : 'text-gray-500 hover:bg-white/20 hover:text-indigo-800 border border-transparent hover:border-white/30'
@@ -152,7 +186,6 @@ export function MainView() {
 }
 
 function DashboardTab() {
-  const history = useAppStore(state => state.history);
   const hotkey = useAppStore(state => state.hotkey);
 
   const formatHotkeyLabel = (value: string) => {
@@ -176,63 +209,43 @@ function DashboardTab() {
     return 'Good evening,';
   }, []);
 
-  const totalWords = useMemo(() => {
-    return history.reduce((acc, item) => {
-      return acc + item.transcript.split(/\s+/).filter(w => w.length > 0).length;
-    }, 0);
-  }, [history]);
+  const totalWords = useAppStore(state => state.totalWordsAllTime || 0);
+  const totalDuration = useAppStore(state => state.totalDurationAllTime || 0);
+  const activeWeeks = useAppStore(state => state.activeWeeks || []);
 
   const averageWpm = useMemo(() => {
-    if (history.length === 0) return 0;
-    let totalDuration = 0;
-    let totalWordsInValidItems = 0;
-    
-    history.forEach(item => {
-      const duration = Number(item.duration_seconds) || 0;
-      if (duration > 0) {
-        totalDuration += duration;
-        totalWordsInValidItems += item.transcript.split(/\s+/).filter(w => w.length > 0).length;
-      }
-    });
-
-    if (totalDuration === 0 || totalWordsInValidItems === 0) return 0;
+    if (totalDuration === 0 || totalWords === 0) return 0;
     const minutes = totalDuration / 60;
-    const wpm = Math.round(totalWordsInValidItems / minutes);
+    const wpm = Math.round(totalWords / minutes);
     return isNaN(wpm) ? 0 : wpm;
-  }, [history]);
+  }, [totalWords, totalDuration]);
 
   const postcards = Math.floor(totalWords / 50);
 
-  // Compute a real weekly streak based on history items
+  // Compute a real weekly streak based on active weeks
   const weeklyStreak = useMemo(() => {
-    if (history.length === 0) return 0;
+    if (activeWeeks.length === 0) return 0;
     
-    const getWeekSinceEpoch = (dateString: string) => {
-      const date = new Date(dateString);
-      // Offset to align weeks properly (e.g., starting Monday or Sunday)
-      return Math.floor(date.getTime() / (7 * 24 * 60 * 60 * 1000));
-    };
-
-    const activeWeeks = new Set(history.map(h => getWeekSinceEpoch(h.created_at)));
-    const currentWeek = getWeekSinceEpoch(new Date().toISOString());
+    const currentWeek = getWeekIndex(new Date().toISOString());
+    const weekSet = new Set(activeWeeks);
 
     let streak = 0;
     let checkWeek = currentWeek;
 
     // Streak is active if there's activity this week, OR if they haven't dictacted this week yet but did last week
-    if (!activeWeeks.has(currentWeek) && activeWeeks.has(currentWeek - 1)) {
+    if (!weekSet.has(currentWeek) && weekSet.has(currentWeek - 1)) {
         checkWeek = currentWeek - 1;
-    } else if (!activeWeeks.has(currentWeek)) {
+    } else if (!weekSet.has(currentWeek)) {
         return 0;
     }
 
-    while (activeWeeks.has(checkWeek)) {
+    while (weekSet.has(checkWeek)) {
         streak++;
         checkWeek--;
     }
 
     return streak;
-  }, [history]);
+  }, [activeWeeks]);
 
   return (
     <div className="pb-6 animate-fade-in">
@@ -257,7 +270,7 @@ function DashboardTab() {
                 <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Weekly streak</span>
               </div>
               <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight">
-                {weeklyStreak === 0 ? '0 weeks' : `${weeklyStreak}${weeklyStreak === 1 ? 'st' : weeklyStreak === 2 ? 'nd' : weeklyStreak === 3 ? 'rd' : 'th'} week`}
+                {weeklyStreak === 0 ? '0 weeks' : `${weeklyStreak}${getOrdinalSuffix(weeklyStreak)} week`}
               </div>
             </div>
             <div className="text-[15px] text-gray-500 font-medium mt-6">
@@ -309,10 +322,17 @@ function DashboardTab() {
 function HistoryTab() {
   const history = useAppStore(state => state.history);
   const setHistory = useAppStore(state => state.setHistory);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const sortedHistory = useMemo(
     () => [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     [history]
   );
+
+  const handleCopy = (item: any) => {
+    navigator.clipboard.writeText(item.transcript);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   return (
     <div className="pb-6 animate-fade-in">
@@ -350,11 +370,11 @@ function HistoryTab() {
                   </span>
                 </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(item.transcript)}
+                  onClick={() => handleCopy(item)}
                   className="text-[12px] font-bold glass-btn hover:text-indigo-600 text-gray-500 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
                 >
-                  <ClipboardList className="w-3.5 h-3.5" />
-                  Copy
+                  {copiedId === item.id ? <Check className="w-3.5 h-3.5" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                  {copiedId === item.id ? 'Copied' : 'Copy'}
                 </button>
               </div>
               <p className="text-[16px] text-gray-800 leading-relaxed font-medium pl-1">{item.transcript}</p>

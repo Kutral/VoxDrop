@@ -164,3 +164,17 @@
   background-repeat: repeat;
   background-size: 128px 128px;
 }
+
+/* Loading screen animations */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.8s infinite ease-in-out;
+}
