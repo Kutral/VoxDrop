@@ -21,14 +21,18 @@ export const DEFAULT_HOTKEY = 'Control+Super';
 export const getWeekIndex = (dateString: string) => {
   const date = new Date(dateString);
   const sunday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
-  const utcSunday = Date.UTC(sunday.getFullYear(), sunday.getMonth(), sunday.getDate());
-  return Math.round(utcSunday / (7 * 24 * 60 * 60 * 1000));
+  sunday.setHours(0, 0, 0, 0);
+  return Math.floor(sunday.getTime() / (7 * 24 * 60 * 60 * 1000));
 };
+
+export type LLMProvider = 'groq' | 'cerebras';
 
 interface AppState {
   apiKey: string;
+  cerebrasApiKey: string;
   whisperModel: string;
   llamaModel: string;
+  llamaProvider: LLMProvider;
   hotkey: string;
   isRecording: boolean;
   isProcessing: boolean;
@@ -40,8 +44,10 @@ interface AppState {
   totalDurationAllTime: number;
   
   setApiKey: (key: string) => void;
+  setCerebrasApiKey: (key: string) => void;
   setWhisperModel: (model: string) => void;
   setLlamaModel: (model: string) => void;
+  setLlamaProvider: (provider: LLMProvider) => void;
   setHotkey: (hotkey: string) => void;
   setIsRecording: (recording: boolean) => void;
   setIsProcessing: (processing: boolean) => void;
@@ -52,14 +58,40 @@ interface AppState {
   removeSnippet: (id: number) => void;
   setHistory: (history: HistoryItem[]) => void;
   addHistoryItem: (item: HistoryItem) => void;
+  removeHistoryItem: (id: number) => void;
+  recomputeStats: () => void;
 }
+
+const computeStatsFromHistory = (history: HistoryItem[]) => {
+  let words = 0;
+  let duration = 0;
+  const weekSet = new Set<number>();
+
+  for (const item of history) {
+    if (!item.transcript) continue;
+    const itemWords = item.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
+    words += itemWords;
+    duration += Math.max(Number(item.duration_seconds) || 0, 0);
+    if (item.created_at) {
+      weekSet.add(getWeekIndex(item.created_at));
+    }
+  }
+
+  return {
+    totalWordsAllTime: words,
+    totalDurationAllTime: duration,
+    activeWeeks: Array.from(weekSet),
+  };
+};
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       apiKey: import.meta.env.VITE_GROQ_API_KEY ?? '',
+      cerebrasApiKey: import.meta.env.VITE_CEREBRAS_API_KEY ?? '',
       whisperModel: 'whisper-large-v3-turbo',
-      llamaModel: 'llama-3.1-8b-instant',
+      llamaModel: 'openai/gpt-oss-20b',
+      llamaProvider: 'groq',
       hotkey: DEFAULT_HOTKEY,
       isRecording: false,
       isProcessing: false,
@@ -71,8 +103,10 @@ export const useAppStore = create<AppState>()(
       totalDurationAllTime: 0,
 
       setApiKey: (key) => set({ apiKey: key }),
+      setCerebrasApiKey: (key) => set({ cerebrasApiKey: key }),
       setWhisperModel: (model) => set({ whisperModel: model }),
       setLlamaModel: (model) => set({ llamaModel: model }),
+      setLlamaProvider: (provider) => set({ llamaProvider: provider }),
       setHotkey: (hotkey) => set({ hotkey }),
       setIsRecording: (recording) => set({ isRecording: recording }),
       setIsProcessing: (processing) => set({ isProcessing: processing }),
@@ -84,47 +118,68 @@ export const useAppStore = create<AppState>()(
       })),
       removeSnippet: (id) => set((state) => ({ snippets: state.snippets.filter(s => s.id !== id) })),
       setHistory: (history) => set(() => {
-        if (history.length === 0) {
-          return {
-            history,
-            activeWeeks: [],
-            totalWordsAllTime: 0,
-            totalDurationAllTime: 0
-          };
-        }
-        return { history };
+        const stats = computeStatsFromHistory(history);
+        return {
+          history,
+          ...stats,
+        };
+      }),
+      removeHistoryItem: (id) => set((state) => {
+        const updated = state.history.filter(item => item.id !== id);
+        const stats = computeStatsFromHistory(updated);
+        return {
+          history: updated,
+          ...stats,
+        };
+      }),
+      recomputeStats: () => set((state) => {
+        const stats = computeStatsFromHistory(state.history);
+        return { ...stats };
       }),
       addHistoryItem: (item) => set((state) => {
         const dedupedHistory = state.history.filter((entry) => entry.id !== item.id);
-        const itemWords = item.transcript.split(/\s+/).filter(w => w.length > 0).length;
-        const itemDuration = Number(item.duration_seconds) || 0;
-        const isNew = !state.history.some(h => h.id === item.id);
-
         const newHistory = [item, ...dedupedHistory].slice(0, MAX_HISTORY_ITEMS);
-
-        let newActiveWeeks = state.activeWeeks || [];
-        if (isNew) {
-          const itemWeek = getWeekIndex(item.created_at);
-          if (!newActiveWeeks.includes(itemWeek)) {
-            newActiveWeeks = [...newActiveWeeks, itemWeek];
-          }
-        }
+        const stats = computeStatsFromHistory(newHistory);
 
         return {
           history: newHistory,
-          activeWeeks: newActiveWeeks,
-          totalWordsAllTime: isNew ? (state.totalWordsAllTime || 0) + itemWords : (state.totalWordsAllTime || 0),
-          totalDurationAllTime: isNew ? (state.totalDurationAllTime || 0) + itemDuration : (state.totalDurationAllTime || 0),
+          ...stats,
         };
       }),
     }),
     {
       name: 'voxdrop-storage',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+
+        if (
+          state.llamaModel === 'llama-3.1-8b-instant' ||
+          state.llamaModel === 'llama-3.3-70b-versatile' ||
+          state.llamaModel === 'llama3-8b-8192' ||
+          state.llamaModel === 'llama3-70b-8192' ||
+          state.llamaModel === 'groq/compound-mini' ||
+          state.llamaModel === 'llama-3.3-70b' ||
+          state.llamaModel === 'llama3.1-8b'
+        ) {
+          state.llamaModel =
+            state.llamaProvider === 'cerebras' ? 'gemma-4-31b' : 'openai/gpt-oss-20b';
+        }
+        if (!state.llamaProvider) {
+          state.llamaProvider = 'groq';
+        }
+
+        const recomputed = computeStatsFromHistory(state.history || []);
+        state.totalWordsAllTime = recomputed.totalWordsAllTime;
+        state.totalDurationAllTime = recomputed.totalDurationAllTime;
+        state.activeWeeks = recomputed.activeWeeks;
+      },
       partialize: (state) => ({ 
-        apiKey: state.apiKey, 
+        apiKey: state.apiKey,
+        cerebrasApiKey: state.cerebrasApiKey,
         whisperModel: state.whisperModel, 
         llamaModel: state.llamaModel,
+        llamaProvider: state.llamaProvider,
         hotkey: state.hotkey,
         snippets: state.snippets,
         history: state.history,

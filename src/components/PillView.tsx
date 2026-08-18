@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
 import { useAppStore } from '../store';
-import { transcribeAudio, cleanupText } from '../lib/groq';
+import { transcribeAudio } from '../lib/groq';
+import { cleanupTextWithProvider } from '../lib/inference';
 import { playStartEarcon, playSuccessEarcon } from '../lib/sounds';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
@@ -276,7 +277,7 @@ export function PillView() {
         try {
           const base64Audio: string = await invoke('stop_recording');
 
-          const { apiKey, whisperModel, llamaModel } = useAppStore.getState();
+          const { apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider } = useAppStore.getState();
 
           const rawText = await transcribeAudio(base64Audio, apiKey, whisperModel);
 
@@ -287,7 +288,8 @@ export function PillView() {
 
           setStatusMsg('Cleaning up...');
           setTextKey(k => k + 1);
-          let cleanText = await cleanupText(rawText, apiKey, llamaModel);
+          const activeCleanupKey = llamaProvider === 'cerebras' ? cerebrasApiKey : apiKey;
+          let cleanText = await cleanupTextWithProvider(rawText, llamaProvider, activeCleanupKey, llamaModel, apiKey);
 
           const snippets = useAppStore.getState().snippets;
           for (const snippet of snippets) {

@@ -11,7 +11,7 @@ mod windows_hotkey;
 
 use tauri::menu::MenuBuilder;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Listener, Manager};
+use tauri::{Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const DEFAULT_HOTKEY: &str = "Control+Super";
 const TRAY_ID: &str = "voxdrop-tray";
@@ -39,27 +39,115 @@ fn hotkey_is_modifier_only(value: &str) -> bool {
     part_count >= 2
 }
 
+fn force_present_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.set_skip_taskbar(false);
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+        width: 800.0,
+        height: 840.0,
+    }));
+    let _ = window.center();
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_always_on_top(false);
+
+    #[cfg(windows)]
+    {
+        match window.hwnd() {
+            Ok(hwnd) => {
+                eprintln!("[window] presenting hwnd={hwnd:?}");
+                let handle = hwnd.0 as windows_sys::Win32::Foundation::HWND;
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+                        handle,
+                        windows_sys::Win32::UI::WindowsAndMessaging::SW_RESTORE,
+                    );
+                    windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+                        handle,
+                        windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW,
+                    );
+                    windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                        handle,
+                        windows_sys::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
+                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                    );
+                    windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                        handle,
+                        windows_sys::Win32::UI::WindowsAndMessaging::HWND_NOTOPMOST,
+                        0,
+                        0,
+                        0,
+                        0,
+                        windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
+                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                    );
+                    windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(handle);
+                }
+            }
+            Err(err) => eprintln!("[window] hwnd unavailable: {err}"),
+        }
+    }
+}
+
 fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        eprintln!("[window] show_main_window");
+        force_present_window(&window);
+    } else {
+        eprintln!("[window] main missing");
+    }
+}
+
+fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<tauri::WebviewWindow<R>> {
+    if let Some(window) = app.get_webview_window("pill") {
+        return Some(window);
+    }
+
+    let builder = WebviewWindowBuilder::new(app, "pill", WebviewUrl::App("index.html".into()))
+        .title("Voxdrop Pill")
+        .inner_size(320.0, 48.0)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible(false)
+        .focused(false)
+        .resizable(false);
+
+    match builder.build() {
+        Ok(window) => {
+            eprintln!("[window] created pill");
+            Some(window)
+        }
+        Err(err) => {
+            eprintln!("[window] pill create failed: {err}");
+            None
+        }
     }
 }
 
 fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("pill") {
-        if let Ok(Some(monitor)) = window.primary_monitor() {
-            let screen_size = monitor.size();
-            let scale = monitor.scale_factor();
-            let pill_w = 320.0;
-            let pill_h = 48.0;
-            let x = ((screen_size.width as f64 / scale) - pill_w) / 2.0;
-            let y = (screen_size.height as f64 / scale) - pill_h - 80.0;
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
-        }
-        let _ = window.show();
+    let Some(window) = ensure_pill_window(app) else {
+        return;
+    };
+
+    if let Ok(Some(monitor)) = window.primary_monitor() {
+        let screen_size = monitor.size();
+        let scale = monitor.scale_factor();
+        let pill_w = 320.0;
+        let pill_h = 48.0;
+        let x = ((screen_size.width as f64 / scale) - pill_w) / 2.0;
+        let y = (screen_size.height as f64 / scale) - pill_h - 80.0;
+        let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
     }
+    let _ = window.show();
 }
 
 #[tauri::command]
@@ -184,12 +272,16 @@ pub fn run() {
             }
         });
 
-        if let Some(window) = app.get_webview_window("pill") {
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                x: -9999.0,
-                y: -9999.0,
-            }));
-            let _ = window.set_always_on_top(true);
+        if let Some(window) = app.get_webview_window("main") {
+            eprintln!(
+                "[window] main visible={:?} size={:?} pos={:?}",
+                window.is_visible(),
+                window.outer_size(),
+                window.outer_position()
+            );
+            force_present_window(&window);
+        } else {
+            eprintln!("[window] main window was not created from config");
         }
 
         // Listen for pill-hide events from the frontend to move the window offscreen reliably

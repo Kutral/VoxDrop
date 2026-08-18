@@ -1,9 +1,7 @@
-import Groq from "groq-sdk";
-
 function normalizeForComparison(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
 }
@@ -26,46 +24,17 @@ function shouldUseRawTranscript(rawText: string, cleanedText: string): boolean {
   return looksLikeAssistantReply || overlapRatio < 0.45;
 }
 
-export const DEFAULT_GROQ_CHAT_MODEL = "openai/gpt-oss-20b";
-export const DEFAULT_GROQ_WHISPER_MODEL = "whisper-large-v3-turbo";
+export const DEFAULT_CEREBRAS_MODEL = 'gemma-4-31b';
+const CEREBRAS_BASE_URL = 'https://api.cerebras.ai/v1';
 
-export async function transcribeAudio(
-  base64Audio: string,
-  apiKey: string,
-  model: string = DEFAULT_GROQ_WHISPER_MODEL
-): Promise<string> {
-  const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
-
-  // Convert base64 to File object
-  const byteCharacters = atob(base64Audio);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  const blob = new Blob([byteArray], { type: "audio/wav" });
-  const file = new File([blob], "audio.wav", { type: "audio/wav" });
-
-  const transcription = await groq.audio.transcriptions.create({
-    file: file,
-    model: model || DEFAULT_GROQ_WHISPER_MODEL,
-    response_format: "text",
-    language: "en",
-  });
-
-  return transcription as unknown as string; // GROQ returns raw string when response_format="text"
-}
-
-export async function cleanupText(
+export async function cleanupTextCerebras(
   rawText: string,
   apiKey: string,
-  model: string = DEFAULT_GROQ_CHAT_MODEL
+  model: string = DEFAULT_CEREBRAS_MODEL
 ): Promise<string> {
   if (!apiKey || !apiKey.trim()) {
     return rawText;
   }
-
-  const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
 
   const systemPrompt = `You are a DICTATION TEXT FORMATTER. You are NOT a chatbot. You are NOT an assistant. You do NOT answer questions. You do NOT have conversations.
 
@@ -82,54 +51,97 @@ STRICT RULES:
 
 CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. Nothing else. No preamble. No explanation. No "Here's the cleaned text:". Just the cleaned text itself.`;
 
-  // Cap output tokens to prevent the model from generating content
   const inputWordCount = rawText.split(/\s+/).length;
   const maxOutputTokens = Math.max(128, Math.min(inputWordCount * 4, 1024));
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `[DICTATION TO CLEAN]: ${rawText}` },
-      ],
-      model: model || DEFAULT_GROQ_CHAT_MODEL,
-      temperature: 0,
-      max_tokens: maxOutputTokens,
+    const response = await fetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_CEREBRAS_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `[DICTATION TO CLEAN]: ${rawText}` },
+        ],
+        temperature: 0,
+        max_tokens: maxOutputTokens,
+      }),
     });
 
-    const cleanedText = chatCompletion.choices[0]?.message?.content?.trim() || rawText;
+    if (!response.ok) {
+      console.warn(`Cerebras API returned status ${response.status}: ${response.statusText}`);
+      return rawText;
+    }
+
+    const data = await response.json();
+    const cleanedText = data.choices?.[0]?.message?.content?.trim() || rawText;
     return shouldUseRawTranscript(rawText, cleanedText) ? rawText.trim() : cleanedText;
   } catch (err) {
-    console.error('Error during Groq cleanup:', err);
+    console.error('Error during Cerebras cleanup:', err);
     return rawText;
   }
 }
 
-export interface KeyValidationResult {
+export interface CerebrasKeyValidationResult {
   valid: boolean;
   error?: string;
 }
 
-export async function testApiKey(apiKey: string): Promise<KeyValidationResult> {
+export async function testCerebrasKey(apiKey: string): Promise<CerebrasKeyValidationResult> {
   if (!apiKey || !apiKey.trim()) {
     return { valid: false, error: 'API key is required' };
   }
+
   try {
-    const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
-    await groq.models.list();
-    return { valid: true };
-  } catch (err: any) {
-    console.error('Groq key verification failed:', err);
-    const status = err?.status || err?.statusCode;
-    if (status === 401 || status === 403) {
+    const response = await fetch(`${CEREBRAS_BASE_URL}/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey.trim()}`,
+      },
+    });
+
+    if (response.ok) {
+      return { valid: true };
+    }
+
+    if (response.status === 401 || response.status === 403) {
       return { valid: false, error: 'Unauthorized (invalid key)' };
     }
-    if (status === 429) {
+
+    if (response.status === 429) {
       return { valid: false, error: 'Rate limit exceeded' };
     }
-    if (err?.message && /network|failed to fetch/i.test(err.message)) {
-      return { valid: false, error: 'Network error' };
+
+    // If /models returns 404, fallback to minimal chat completion check with default model
+    if (response.status === 404) {
+      const chatRes = await fetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: DEFAULT_CEREBRAS_MODEL,
+          messages: [{ role: 'user', content: 'test' }],
+          max_tokens: 1,
+        }),
+      });
+
+      if (chatRes.ok) {
+        return { valid: true };
+      }
+      if (chatRes.status === 401 || chatRes.status === 403) {
+        return { valid: false, error: 'Unauthorized (invalid key)' };
+      }
     }
-    return { valid: false, error: err?.message || 'Authentication failed' };
+
+    return { valid: false, error: `Error ${response.status}: ${response.statusText}` };
+  } catch (err) {
+    console.error('Cerebras key verification failed:', err);
+    return { valid: false, error: 'Network error' };
   }
 }

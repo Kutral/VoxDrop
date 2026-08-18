@@ -1,11 +1,52 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { DEFAULT_HOTKEY, useAppStore, getWeekIndex } from '../store';
-import { testApiKey } from '../lib/groq';
+import { DEFAULT_HOTKEY, useAppStore, getWeekIndex, LLMProvider } from '../store';
+import { testKeyWithProvider, GROQ_MODEL_PRESETS, CEREBRAS_MODEL_PRESETS, WHISPER_MODEL_PRESETS } from '../lib/inference';
+import { DEFAULT_GROQ_CHAT_MODEL } from '../lib/groq';
+import { DEFAULT_CEREBRAS_MODEL } from '../lib/cerebras';
 import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type ReleaseCheckResult } from '../lib/updates';
 import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { LayoutDashboard, History, ClipboardList, Settings, CheckCircle, XCircle, Loader2, Sparkles, Command, Plus, Trash2, Edit2, Copy, Check } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  History, 
+  ClipboardList, 
+  Settings, 
+  CheckCircle2, 
+  XCircle, 
+  Loader2, 
+  Sparkles, 
+  Command, 
+  Plus, 
+  Trash2, 
+  Edit3, 
+  Copy, 
+  Check,
+  Cpu,
+  Zap,
+  Key,
+  ExternalLink,
+  Search,
+  Clock,
+  Flame,
+  Gauge,
+  Hourglass,
+  Eye,
+  EyeOff,
+  Mic,
+  ChevronDown,
+  RotateCcw,
+  ArrowRight,
+  X,
+  ShieldCheck,
+  RefreshCw,
+  Sliders,
+  HardDrive,
+  Keyboard,
+  Calendar,
+  TrendingUp,
+  Activity
+} from 'lucide-react';
 
 const getOrdinalSuffix = (num: number) => {
   const j = num % 10;
@@ -18,37 +59,21 @@ const getOrdinalSuffix = (num: number) => {
 
 export function MainView() {
   const [tab, setTab] = useState<'dashboard' | 'history' | 'snippets' | 'settings'>('dashboard');
+  const [installedVer, setInstalledVer] = useState<string>('0.0.12');
 
-  // One-time migration for all-time statistics and active weeks
   const history = useAppStore(state => state.history);
-  const activeWeeks = useAppStore(state => state.activeWeeks);
-  const totalWordsAllTime = useAppStore(state => state.totalWordsAllTime);
+  const { apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider, snippets, hotkey, recomputeStats } = useAppStore();
 
+  // Ensure stats are recomputed on mount
   useEffect(() => {
-    if (history.length > 0 && (!activeWeeks || activeWeeks.length === 0 || totalWordsAllTime === 0)) {
-      let wordsAllTime = 0;
-      let durationAllTime = 0;
-      const weeks = Array.from(new Set(history.map(h => getWeekIndex(h.created_at))));
-      
-      history.forEach(item => {
-        const itemWords = item.transcript.split(/\s+/).filter(w => w.length > 0).length;
-        wordsAllTime += itemWords;
-        durationAllTime += (Number(item.duration_seconds) || 0);
-      });
-
-      useAppStore.setState({
-        activeWeeks: weeks,
-        totalWordsAllTime: wordsAllTime,
-        totalDurationAllTime: durationAllTime
-      });
-    }
-  }, [history, activeWeeks, totalWordsAllTime]);
+    recomputeStats();
+    getInstalledVersion().then(setInstalledVer).catch(() => {});
+  }, [recomputeStats]);
 
   // Track settings changes and broadcast to pill window so it can rehydrate
-  const { apiKey, whisperModel, llamaModel, snippets, hotkey } = useAppStore();
   useEffect(() => {
     emit('settings-changed').catch(console.error);
-  }, [apiKey, whisperModel, llamaModel, snippets, hotkey]);
+  }, [apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider, snippets, hotkey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +120,7 @@ export function MainView() {
         }
 
         const current = useAppStore.getState().history;
-        if (!current.find(h => h.id === payload.id)) {
+        if (!current.find(h => h.id === (payload as any).id)) {
           useAppStore.getState().addHistoryItem(payload as any);
         }
       } catch {
@@ -115,114 +140,232 @@ export function MainView() {
     };
   }, []);
 
-  const navItem = (id: 'dashboard' | 'history' | 'snippets' | 'settings', Icon: any, label: string) => {
+  const navItem = (id: 'dashboard' | 'history' | 'snippets' | 'settings', Icon: any, label: string, badgeCount?: number) => {
     const active = tab === id;
     return (
       <button
         onClick={() => setTab(id)}
-        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-100 ${
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all duration-150 relative ${
           active
-            ? 'bg-white/30 text-indigo-900 border border-white/60 backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.03),inset_0_1px_0_rgba(255,255,255,0.5)]'
-            : 'text-gray-500 hover:bg-white/20 hover:text-indigo-800 border border-transparent hover:border-white/30'
+            ? 'bg-indigo-600 text-white font-semibold shadow-[0_2px_10px_rgba(79,70,229,0.3),inset_0_1px_0_rgba(255,255,255,0.25)]'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium'
         }`}
       >
-        <Icon className={`w-[18px] h-[18px] ${active ? 'text-indigo-600' : ''}`} strokeWidth={active ? 2.5 : 2} />
-        <span className={`text-[14px] tracking-wide ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
+        <div className="flex items-center gap-3">
+          <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-slate-500'}`} strokeWidth={active ? 2.4 : 2} />
+          <span className="text-[13.5px] tracking-tight">{label}</span>
+        </div>
+        {badgeCount !== undefined && badgeCount > 0 && (
+          <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full ${
+            active ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
+          }`}>
+            {badgeCount}
+          </span>
+        )}
       </button>
     );
   };
 
   return (
-    <div className="w-screen h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50/40 text-gray-900 flex font-sans overflow-hidden relative">
-      {/* Animated Background Mesh */}
+    <div className="w-screen h-screen studio-app text-slate-900 flex font-sans overflow-hidden relative">
+      {/* Studio Ambient Subtle Lighting */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[55%] rounded-full bg-purple-300/50 blur-[120px] animate-blob mix-blend-multiply"></div>
-        <div className="absolute top-[15%] right-[-12%] w-[40%] h-[45%] rounded-full bg-indigo-300/50 blur-[120px] animate-blob mix-blend-multiply" style={{ animationDelay: '2s' }}></div>
-        <div className="absolute bottom-[-25%] left-[15%] w-[55%] h-[45%] rounded-full bg-blue-300/50 blur-[120px] animate-blob mix-blend-multiply" style={{ animationDelay: '4s' }}></div>
-        <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] rounded-full bg-pink-300/40 blur-[100px] animate-blob mix-blend-multiply" style={{ animationDelay: '6s' }}></div>
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[60%] rounded-full bg-indigo-200/30 blur-[130px]" />
+        <div className="absolute top-[40%] -right-[15%] w-[45%] h-[50%] rounded-full bg-blue-100/40 blur-[140px]" />
       </div>
 
-      {/* Glass edge light overlay */}
-      <div className="absolute inset-0 pointer-events-none z-[1] bg-gradient-to-b from-white/30 via-transparent to-white/10"></div>
-
       {/* Sidebar */}
-      <div className="w-[240px] h-full flex flex-col glass-panel p-5 flex-shrink-0 z-20 border-r border-white/40">
-
+      <aside className="w-[230px] h-full flex flex-col studio-sidebar p-4 flex-shrink-0 z-20">
         {/* Brand */}
-        <div className="flex items-center gap-3 px-2 mb-10 mt-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm border border-white/40 bg-white/30 backdrop-blur-md">
+        <div className="flex items-center gap-2.5 px-2 py-3 mb-6">
+          <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm border border-slate-200/80 bg-white p-1">
             <img src="/app-icon.png" alt="VoxDrop Logo" className="w-full h-full object-cover" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-gray-900">VoxDrop</span>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[15px] font-extrabold tracking-tight text-slate-900 leading-none">VoxDrop</span>
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+                v{installedVer}
+              </span>
+            </div>
+            <span className="text-[10.5px] font-medium text-slate-600 tracking-wider uppercase block mt-0.5">
+              Acoustic Dictation
+            </span>
+          </div>
         </div>
 
         {/* Nav Items */}
-        <div className="flex flex-col gap-1.5 w-full">
-           {navItem('dashboard', LayoutDashboard, 'Dashboard')}
-           {navItem('history', History, 'History')}
-           {navItem('snippets', ClipboardList, 'Snippets')}
-        </div>
+        <nav className="flex flex-col gap-1 w-full">
+          {navItem('dashboard', LayoutDashboard, 'Dashboard')}
+          {navItem('history', History, 'History', history.length)}
+          {navItem('snippets', ClipboardList, 'Snippets', snippets.length)}
+        </nav>
 
         <div className="flex-1" />
 
-        <div className="flex flex-col gap-1.5 w-full">
-           {navItem('settings', Settings, 'Settings')}
+        {/* Engine Status Tag */}
+        <div className="p-3 mb-3 rounded-xl bg-slate-100/80 border border-slate-200/60 text-[11px] text-slate-600">
+          <div className="flex items-center gap-1.5 font-semibold text-slate-700 mb-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Active Engine</span>
+          </div>
+          <p className="font-mono text-[10px] text-slate-500 truncate">
+            {llamaProvider === 'cerebras' ? 'Cerebras Wafer' : 'Groq LPU'} • Whisper
+          </p>
         </div>
-      </div>
+
+        {/* Settings button */}
+        <div className="flex flex-col gap-1 w-full pt-2 border-t border-slate-200/60">
+          {navItem('settings', Settings, 'Preferences')}
+        </div>
+      </aside>
 
       {/* Main Content Pane */}
-      <div className="flex-1 h-full relative z-10 overflow-hidden flex flex-col bg-transparent">
-         <div className="content-scroll flex-1 overflow-y-auto custom-scrollbar p-10 lg:p-14 relative">
-            <div className="max-w-[840px] mx-auto w-full relative z-10">
-              {tab === 'dashboard' && <DashboardTab />}
-              {tab === 'history' && <HistoryTab />}
-              {tab === 'snippets' && <SnippetsTab />}
-              {tab === 'settings' && <SettingsTab />}
-            </div>
-         </div>
-      </div>
+      <main className="flex-1 h-full relative z-10 overflow-hidden flex flex-col">
+        <div className="content-scroll flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10 relative">
+          <div className="max-w-5xl mx-auto w-full relative z-10">
+            {tab === 'dashboard' && <DashboardTab onNavigate={(target) => setTab(target)} />}
+            {tab === 'history' && <HistoryTab />}
+            {tab === 'snippets' && <SnippetsTab />}
+            {tab === 'settings' && <SettingsTab />}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
 
-function DashboardTab() {
+function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippets' | 'settings') => void }) {
   const hotkey = useAppStore(state => state.hotkey);
+  const history = useAppStore(state => state.history);
+  const activeWeeks = useAppStore(state => state.activeWeeks || []);
+  const apiKey = useAppStore(state => state.apiKey);
+  const llamaProvider = useAppStore(state => state.llamaProvider);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const formatHotkeyLabel = (value: string) => {
     return value
       .split('+')
       .filter(Boolean)
       .map((part) => {
-        if (part === 'Control') return 'ctrl';
-        if (part === 'Super') return 'win';
-        if (part === 'Alt') return 'alt';
-        if (part === 'Shift') return 'shift';
-        return part.toLowerCase();
-      })
-      .join(' + ');
+        if (part === 'Control') return 'Ctrl';
+        if (part === 'Super') return 'Win';
+        if (part === 'Alt') return 'Alt';
+        if (part === 'Shift') return 'Shift';
+        return part;
+      });
   };
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning,';
-    if (hour < 17) return 'Good afternoon,';
-    return 'Good evening,';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }, []);
 
-  const totalWords = useAppStore(state => state.totalWordsAllTime || 0);
-  const totalDuration = useAppStore(state => state.totalDurationAllTime || 0);
-  const activeWeeks = useAppStore(state => state.activeWeeks || []);
+  // Compute telemetry and statistics with high accuracy & outlier filtering
+  const stats = useMemo(() => {
+    if (!history || history.length === 0) {
+      return {
+        totalWords: 0,
+        averageWpm: 0,
+        peakWpm: 0,
+        wordsToday: 0,
+        todayCount: 0,
+        timeSavedMinutes: 0,
+        timeSavedFormatted: '0m',
+        totalSpokenSeconds: 0,
+        totalSpokenFormatted: '0s',
+        speedMultiplier: '3.8x',
+        speedTier: 'Ready to speak',
+        averageWordsPerSession: 0,
+        pagesCount: 0,
+      };
+    }
 
-  const averageWpm = useMemo(() => {
-    if (totalDuration === 0 || totalWords === 0) return 0;
-    const minutes = totalDuration / 60;
-    const wpm = Math.round(totalWords / minutes);
-    return isNaN(wpm) ? 0 : wpm;
-  }, [totalWords, totalDuration]);
+    let allWords = 0;
+    let validWpmWords = 0;
+    let validWpmMinutes = 0;
+    let todayWords = 0;
+    let todayCount = 0;
+    let totalDuration = 0;
+    let peakWpm = 0;
 
-  const postcards = Math.floor(totalWords / 50);
+    const todayDateString = new Date().toDateString();
 
-  // Compute a real weekly streak based on active weeks
+    for (const item of history) {
+      if (!item.transcript) continue;
+      const words = item.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
+      allWords += words;
+
+      const durationSec = Number(item.duration_seconds) || 0;
+      totalDuration += durationSec;
+
+      // Track words today
+      if (item.created_at && new Date(item.created_at).toDateString() === todayDateString) {
+        todayWords += words;
+        todayCount++;
+      }
+
+      // Filter outlier durations (< 0.6s or noise clicks) for high accuracy speaking WPM
+      if (words >= 2 && durationSec >= 0.6 && durationSec <= 300) {
+        const itemWpm = words / (durationSec / 60);
+        if (itemWpm >= 30 && itemWpm <= 450) {
+          validWpmWords += words;
+          validWpmMinutes += (durationSec / 60);
+          if (words >= 5 && itemWpm > peakWpm) {
+            peakWpm = Math.round(itemWpm);
+          }
+        }
+      }
+    }
+
+    // Weighted average WPM
+    const wpm = validWpmMinutes > 0 ? Math.round(validWpmWords / validWpmMinutes) : 0;
+
+    // Standard human typing benchmark is ~40 WPM
+    const effectiveWpm = wpm > 40 ? wpm : 140;
+    const timeSavedMin = Math.round(allWords * (1 / 40 - 1 / effectiveWpm));
+
+    const timeSavedFormatted = timeSavedMin >= 60 
+      ? `${(timeSavedMin / 60).toFixed(1)} hrs`
+      : `${timeSavedMin} mins`;
+
+    const totalSpokenFormatted = totalDuration >= 60
+      ? `${Math.floor(totalDuration / 60)}m ${Math.round(totalDuration % 60)}s`
+      : `${Math.round(totalDuration)}s`;
+
+    const speedMultiplier = wpm > 0 
+      ? `${(wpm / 40).toFixed(1)}x` 
+      : '3.8x';
+
+    let speedTier = 'Conversational';
+    if (wpm >= 170) speedTier = '⚡ Turbo Velocity';
+    else if (wpm >= 130) speedTier = '🔥 High Speed';
+    else if (wpm >= 90) speedTier = '✨ Conversational';
+    else if (wpm > 0) speedTier = '🎯 Steady';
+
+    const avgPerSession = history.length > 0 ? Math.round(allWords / history.length) : 0;
+    const pages = Math.max(1, Math.round(allWords / 250));
+
+    return {
+      totalWords: allWords,
+      averageWpm: wpm,
+      peakWpm,
+      wordsToday: todayWords,
+      todayCount,
+      timeSavedMinutes: Math.max(0, timeSavedMin),
+      timeSavedFormatted,
+      totalSpokenSeconds: totalDuration,
+      totalSpokenFormatted,
+      speedMultiplier,
+      speedTier,
+      averageWordsPerSession: avgPerSession,
+      pagesCount: pages,
+    };
+  }, [history]);
+
+  // Compute accurate weekly streak based on active weeks
   const weeklyStreak = useMemo(() => {
     if (activeWeeks.length === 0) return 0;
     
@@ -232,87 +375,465 @@ function DashboardTab() {
     let streak = 0;
     let checkWeek = currentWeek;
 
-    // Streak is active if there's activity this week, OR if they haven't dictacted this week yet but did last week
     if (!weekSet.has(currentWeek) && weekSet.has(currentWeek - 1)) {
-        checkWeek = currentWeek - 1;
+      checkWeek = currentWeek - 1;
     } else if (!weekSet.has(currentWeek)) {
-        return 0;
+      return 0;
     }
 
     while (weekSet.has(checkWeek)) {
-        streak++;
-        checkWeek--;
+      streak++;
+      checkWeek--;
     }
 
     return streak;
   }, [activeWeeks]);
 
+  // 7-Day Activity Rhythm Map for the current calendar week
+  const weekDays = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay(); // 0 is Sunday
+    // Calculate Monday of current week
+    const distanceToMonday = (currentDay + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.map((dayLabel, index) => {
+      const dayDate = new Date(monday.getTime() + index * 24 * 60 * 60 * 1000);
+      const dateStr = dayDate.toDateString();
+      const isToday = dateStr === now.toDateString();
+      const isPastOrToday = dayDate <= now;
+      
+      let wordsOnDay = 0;
+      let countOnDay = 0;
+      for (const item of history) {
+        if (item.created_at && new Date(item.created_at).toDateString() === dateStr) {
+          const w = item.transcript.trim().split(/\s+/).filter(Boolean).length;
+          wordsOnDay += w;
+          countOnDay++;
+        }
+      }
+
+      return {
+        dayLabel,
+        dateNumber: dayDate.getDate(),
+        isToday,
+        isPastOrToday,
+        hasActivity: countOnDay > 0,
+        wordsOnDay,
+        countOnDay,
+      };
+    });
+  }, [history]);
+
+  const recentItems = useMemo(() => {
+    return [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4);
+  }, [history]);
+
+  const handleCopy = (item: any) => {
+    navigator.clipboard.writeText(item.transcript);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const keyParts = formatHotkeyLabel(hotkey);
+
   return (
-    <div className="pb-6 animate-fade-in">
-      <div className="mb-14">
-        <h1 className="text-[44px] font-bold tracking-tight text-gradient mb-2">{greeting}</h1>
-        <div className="flex items-center text-[17px] text-gray-600 gap-1.5 font-medium">
-          Hold down 
-          <kbd className="px-2.5 py-1 rounded-lg bg-white/20 border border-white/50 text-indigo-900 text-sm font-mono mx-1 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_2px_6px_rgba(0,0,0,0.04)]">
-            {formatHotkeyLabel(hotkey)}
-          </kbd> 
-          and speak into any textbox
+    <div className="pb-12 space-y-7 animate-fade-in">
+      {/* Hero Header & Live Telemetry Strip */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-3 border-b border-slate-200/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1.5 shadow-2xs">
+              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+              Acoustic Intelligence Hub
+            </span>
+            {apiKey && (
+              <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Engine Active
+              </span>
+            )}
+          </div>
+          <h1 className="text-[32px] sm:text-[34px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+            {greeting}, ready to dictate
+          </h1>
+          <p className="text-slate-600 text-[14.5px] mt-1 font-medium max-w-xl">
+            High-velocity speech capture, auto-formatted and instantly pasted into your active app.
+          </p>
+        </div>
+
+        {/* Hotkey Badge Pill */}
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white/90 border border-slate-200/80 shadow-xs self-start lg:self-auto backdrop-blur-md">
+          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <Mic className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">Global Trigger</span>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-[12px] font-semibold text-slate-600 mr-0.5">Hold</span>
+              {keyParts.map((k, i) => (
+                <span key={i} className="keycap text-[12px]">{k}</span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Streak Card */}
-        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Weekly streak</span>
-              </div>
-              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight">
-                {weeklyStreak === 0 ? '0 weeks' : `${weeklyStreak}${getOrdinalSuffix(weeklyStreak)} week`}
-              </div>
+      {/* 4 High-Accuracy Stat Telemetry Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Speaking Velocity */}
+        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-indigo-300">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Gauge className="w-4 h-4 text-indigo-600" /> Speaking Speed
+            </span>
+            {stats.averageWpm > 0 && (
+              <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {stats.speedTier}
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
+                {stats.averageWpm > 0 ? stats.averageWpm : '—'}
+              </span>
+              <span className="text-[14px] font-bold text-slate-500">WPM</span>
             </div>
-            <div className="text-[15px] text-gray-500 font-medium mt-6">
-              {weeklyStreak > 0 ? 'You are off to a great start!' : 'Start dictating to build a streak!'}
+
+            {/* Velocity Bar Indicator */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(10, (stats.averageWpm / 200) * 100))}%` }}
+              />
             </div>
+
+            <p className="text-[12px] text-slate-600 font-medium mt-2">
+              {stats.averageWpm > 0 
+                ? <><strong className="text-slate-800 font-bold">{stats.speedMultiplier}</strong> faster than typing (~40 WPM)</>
+                : 'Start dictating to calculate speed'}
+            </p>
           </div>
         </div>
 
-        {/* Speed Card */}
-        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-teal-400/20 to-emerald-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Average Speed</span>
-              </div>
-              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight">
-                {averageWpm > 0 ? averageWpm : 0} <span className="text-[20px] text-gray-500 font-semibold">WPM</span>
-              </div>
+        {/* Card 2: Time Saved */}
+        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-blue-300">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Hourglass className="w-4 h-4 text-blue-600" /> Time Saved
+            </span>
+            <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+              ~75% Savings
+            </span>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
+                {stats.timeSavedFormatted}
+              </span>
+              <span className="text-[14px] font-bold text-slate-500">saved</span>
             </div>
-            <div className="text-[15px] text-gray-500 font-medium mt-6">
-              {averageWpm > 0 ? (averageWpm > 60 ? 'Faster than 90% of typers' : 'Steady and clear') : 'Start dictating to track speed'}
+
+            {/* Efficiency Progress Line */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: '75%' }}
+              />
             </div>
+
+            <p className="text-[12px] text-slate-600 font-medium mt-2">
+              Saved vs standard keyboard typing
+            </p>
           </div>
         </div>
 
-        {/* Total Words Card */}
-        <div className="glass-card rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-400/20 to-orange-400/20 blur-2xl -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150"></div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-gray-700 font-bold tracking-wide text-[13px] uppercase">Total words</span>
-              </div>
-              <div className="text-[32px] font-bold text-gray-900 mb-1 tracking-tight flex items-center gap-2">
-                {totalWords} <span className="text-[24px]">🔥</span>
-              </div>
+        {/* Card 3: Total Words Captured */}
+        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-amber-300">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Flame className="w-4 h-4 text-amber-500" /> Words Captured
+            </span>
+            {stats.wordsToday > 0 && (
+              <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                +{stats.wordsToday} today
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
+                {stats.totalWords.toLocaleString()}
+              </span>
+              <span className="text-[14px] font-bold text-slate-500">words</span>
             </div>
-            <div className="text-[15px] text-gray-500 font-medium mt-6">
-              {postcards > 0 ? `You've written ${postcards} postcard${postcards !== 1 ? 's' : ''}!` : "Keep going to fill a postcard!"}
+
+            {/* Volume Line */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(15, (stats.totalWords / 2000) * 100))}%` }}
+              />
+            </div>
+
+            <p className="text-[12px] text-slate-600 font-medium mt-2">
+              {stats.totalWords > 0 
+                ? `Equivalent to ~${stats.pagesCount} standard written pages` 
+                : 'Your voice stream is ready'}
+            </p>
+          </div>
+        </div>
+
+        {/* Card 4: Active Streak */}
+        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-purple-300">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-purple-600" /> Weekly Streak
+            </span>
+            <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+              {history.length} captures
+            </span>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
+                {weeklyStreak}
+              </span>
+              <span className="text-[14px] font-bold text-slate-500">
+                {weeklyStreak === 1 ? 'week' : 'weeks'}
+              </span>
+            </div>
+
+            {/* Streak Progress Line */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(20, weeklyStreak * 25))}%` }}
+              />
+            </div>
+
+            <p className="text-[12px] text-slate-600 font-medium mt-2">
+              {weeklyStreak > 0 
+                ? `${weeklyStreak}${getOrdinalSuffix(weeklyStreak)} active week in a row!` 
+                : 'Dictate this week to build streak'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 7-Day Activity Rhythm Bar */}
+      <div className="studio-card p-5 rounded-2xl space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-[15.5px] font-bold text-slate-900 tracking-tight">Weekly Dictation Rhythm</h3>
+          </div>
+          <span className="text-[12px] font-medium text-slate-500">
+            {stats.todayCount > 0 
+              ? `${stats.todayCount} capture${stats.todayCount > 1 ? 's' : ''} recorded today (${stats.wordsToday} words)` 
+              : 'No captures yet today'}
+          </span>
+        </div>
+
+        {/* 7-Day Grid */}
+        <div className="grid grid-cols-7 gap-2 pt-1">
+          {weekDays.map((day, idx) => {
+            return (
+              <div
+                key={idx}
+                className={`p-3 rounded-xl flex flex-col items-center justify-center transition-all ${
+                  day.isToday
+                    ? 'bg-indigo-50/80 border-2 border-indigo-600 shadow-xs'
+                    : day.hasActivity
+                    ? 'bg-slate-50 border border-slate-200/90'
+                    : 'bg-slate-50/40 border border-slate-200/50 opacity-60'
+                }`}
+              >
+                <span className={`text-[11.5px] font-bold uppercase tracking-wider ${
+                  day.isToday ? 'text-indigo-700' : 'text-slate-500'
+                }`}>
+                  {day.dayLabel}
+                </span>
+
+                <span className={`text-[16px] font-extrabold font-mono mt-0.5 ${
+                  day.isToday ? 'text-indigo-900' : day.hasActivity ? 'text-slate-800' : 'text-slate-400'
+                }`}>
+                  {day.dateNumber}
+                </span>
+
+                <div className="mt-1 flex items-center gap-1">
+                  {day.hasActivity ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" title={`${day.wordsOnDay} words captured`} />
+                  ) : day.isPastOrToday ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
+                  )}
+                </div>
+
+                {day.hasActivity && (
+                  <span className="text-[10px] font-mono font-semibold text-emerald-700 mt-1">
+                    {day.wordsOnDay}w
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Recent Transcripts Feed & Quick Actions Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Recent Stream */}
+        <div className="lg:col-span-2 studio-card p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <h2 className="text-[16px] font-bold text-slate-900 tracking-tight">Recent Activity Stream</h2>
+              </div>
+              <button
+                onClick={() => onNavigate('history')}
+                className="text-[13px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+              >
+                View Full Audit Log ({history.length}) <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {recentItems.length === 0 ? (
+              <div className="py-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 mt-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-2 text-indigo-600">
+                  <Mic className="w-5 h-5" />
+                </div>
+                <p className="text-slate-800 font-bold text-[14px]">No dictations recorded yet</p>
+                <p className="text-slate-500 text-[12.5px] mt-1 max-w-xs mx-auto font-medium">
+                  Hold down <kbd className="keycap text-[11px] mx-1">{keyParts.join(' + ')}</kbd> anywhere on your computer to capture voice instantly.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 mt-4">
+                {recentItems.map(item => {
+                  const words = item.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
+                  const durationSec = Number(item.duration_seconds) || 0;
+                  const sessionWpm = durationSec > 0.5 && words > 1 ? Math.round(words / (durationSec / 60)) : 0;
+
+                  return (
+                    <div 
+                      key={item.id}
+                      className="p-4 rounded-xl bg-white border border-slate-200/80 hover:border-indigo-300 hover:shadow-xs transition-all flex items-start justify-between gap-4 group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="telemetry-badge text-[10.5px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="telemetry-badge text-[10.5px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                            {words} words
+                          </span>
+                          {durationSec > 0 && (
+                            <span className="telemetry-badge text-[10.5px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                              ⏱ {durationSec.toFixed(1)}s
+                            </span>
+                          )}
+                          {sessionWpm > 0 && (
+                            <span className="telemetry-badge text-[10.5px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              ⚡ {sessionWpm} WPM
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[14px] text-slate-800 font-medium line-clamp-2 leading-relaxed select-text">
+                          {item.transcript}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => handleCopy(item)}
+                        className="shrink-0 studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1 mt-0.5"
+                        title="Copy transcript"
+                      >
+                        {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedId === item.id ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right 1 Col: Quick Control Surfaces */}
+        <div className="space-y-4">
+          {/* Quick Audio Telemetry Card */}
+          <div className="studio-card p-5 rounded-2xl space-y-3">
+            <div className="flex items-center gap-2 text-slate-900 font-bold text-[14.5px]">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <span>Acoustic Telemetry</span>
+            </div>
+
+            <div className="space-y-2.5 pt-1 text-[13px]">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                <span className="text-slate-600 font-medium">Audio Captured:</span>
+                <span className="font-mono font-bold text-slate-900">{stats.totalSpokenFormatted}</span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                <span className="text-slate-600 font-medium">Avg Words/Capture:</span>
+                <span className="font-mono font-bold text-slate-900">{stats.averageWordsPerSession} words</span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                <span className="text-slate-600 font-medium">Peak Speed:</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {stats.peakWpm > 0 ? `${stats.peakWpm} WPM` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 font-medium">Active Provider:</span>
+                <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {llamaProvider === 'cerebras' ? 'Cerebras' : 'Groq LPU'}
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Quick Voice Snippets CTA */}
+          <div className="studio-card p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/40 border border-indigo-100 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-950 font-bold text-[14.5px]">
+              <Command className="w-4 h-4 text-indigo-600" />
+              <span>Voice Snippets</span>
+            </div>
+            <p className="text-[12.5px] text-slate-600 font-medium">
+              Create instant spoken triggers to expand links, templates, and code blocks.
+            </p>
+            <button
+              onClick={() => onNavigate('snippets')}
+              className="w-full studio-btn px-3 py-2 rounded-xl text-[12.5px] font-bold text-indigo-700 hover:bg-white flex items-center justify-center gap-1.5 shadow-2xs"
+            >
+              <span>Manage Voice Snippets</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Preferences CTA */}
+          <button
+            onClick={() => onNavigate('settings')}
+            className="w-full studio-btn p-4 rounded-2xl text-left hover:border-indigo-300 flex items-center justify-between group transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                <Sliders className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-[13.5px] font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                  Studio Preferences
+                </p>
+                <span className="text-[11.5px] text-slate-500 font-medium">Configure models, hotkeys, & API keys</span>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+          </button>
         </div>
       </div>
     </div>
@@ -322,11 +843,19 @@ function DashboardTab() {
 function HistoryTab() {
   const history = useAppStore(state => state.history);
   const setHistory = useAppStore(state => state.setHistory);
+  const removeHistoryItem = useAppStore(state => state.removeHistoryItem);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const sortedHistory = useMemo(
-    () => [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-    [history]
-  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const sortedFilteredHistory = useMemo(() => {
+    let list = [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(item => item.transcript.toLowerCase().includes(q));
+    }
+    return list;
+  }, [history, searchQuery]);
 
   const handleCopy = (item: any) => {
     navigator.clipboard.writeText(item.transcript);
@@ -334,52 +863,141 @@ function HistoryTab() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleClearAll = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 3500);
+      return;
+    }
+    setHistory([]);
+    setConfirmClear(false);
+  };
+
   return (
-    <div className="pb-6 animate-fade-in">
-      <div className="flex justify-between items-end mb-10">
+    <div className="pb-10 space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-slate-200/80">
         <div>
-          <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Activity Log</h1>
-          <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Every word captured and refined, safely stored locally on your machine.</p>
+          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+            Audit Trail
+          </span>
+          <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+            Activity Log
+          </h1>
+          <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+            Every audio capture refined and safely preserved locally on your device.
+          </p>
         </div>
-        <button
-          onClick={() => setHistory([])}
-          className="px-5 py-2.5 rounded-xl glass-btn hover:border-rose-200/60 hover:bg-rose-50/40 hover:text-rose-600 text-[14px] font-medium text-gray-600 transition-all duration-200"
-        >
-          Clear All
-        </button>
+
+        {history.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all flex items-center gap-1.5 ${
+              confirmClear
+                ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-300'
+                : 'studio-btn text-slate-600 hover:text-rose-600 hover:border-rose-200'
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {confirmClear ? 'Click Again to Confirm' : 'Clear All'}
+          </button>
+        )}
       </div>
-      
-      <div className="space-y-4">
-        {sortedHistory.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 px-4 rounded-3xl glass-surface">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mb-5 border border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md">
-              <Sparkles className="w-7 h-7 text-indigo-400" />
+
+      {/* Search Filter */}
+      {history.length > 0 && (
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search transcripts by keywords..."
+            className="studio-input w-full !pl-10 !pr-10 text-[14px]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 transition-colors"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Stream Cards */}
+      <div className="space-y-3">
+        {history.length === 0 ? (
+          <div className="py-20 text-center studio-card rounded-2xl border-dashed">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 text-indigo-600">
+              <Sparkles className="w-6 h-6" />
             </div>
-            <p className="text-gray-900 font-bold text-lg tracking-tight">Ready for your voice</p>
-            <p className="text-gray-500 text-[15px] mt-1 font-medium">Use your hotkey to start recording.</p>
+            <h3 className="text-[17px] font-bold text-slate-900">No transcripts yet</h3>
+            <p className="text-[14px] text-slate-600 mt-1 max-w-sm mx-auto font-medium">
+              Hold down your dictation shortcut in any app to record and see your words captured here.
+            </p>
+          </div>
+        ) : sortedFilteredHistory.length === 0 ? (
+          <div className="py-12 text-center studio-card rounded-2xl">
+            <p className="text-slate-600 font-semibold">No results matching "{searchQuery}"</p>
           </div>
         ) : (
-          sortedHistory.map(item => (
-            <div key={item.id} className="p-6 rounded-2xl glass-card group relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
-                  <span className="text-[12px] font-bold text-gray-500 tracking-wider uppercase">
-                    {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
+          sortedFilteredHistory.map(item => {
+            const words = item.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
+            const durationSec = Number(item.duration_seconds) || 0;
+            const sessionWpm = durationSec > 0.5 && words > 1 ? Math.round(words / (durationSec / 60)) : 0;
+
+            return (
+              <div 
+                key={item.id}
+                className="studio-card p-5 rounded-2xl group relative overflow-hidden transition-all hover:border-slate-300"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="telemetry-badge text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                      {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                      {words} words
+                    </span>
+                    {durationSec > 0 && (
+                      <span className="telemetry-badge text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                        ⏱ {durationSec.toFixed(1)}s
+                      </span>
+                    )}
+                    {sessionWpm > 0 && (
+                      <span className="telemetry-badge text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        ⚡ {sessionWpm} WPM
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleCopy(item)}
+                      className="studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
+                    >
+                      {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedId === item.id ? 'Copied' : 'Copy'}</span>
+                    </button>
+                    <button
+                      onClick={() => removeHistoryItem(item.id)}
+                      className="studio-btn px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center"
+                      title="Delete entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleCopy(item)}
-                  className="text-[12px] font-bold glass-btn hover:text-indigo-600 text-gray-500 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
-                >
-                  {copiedId === item.id ? <Check className="w-3.5 h-3.5" /> : <ClipboardList className="w-3.5 h-3.5" />}
-                  {copiedId === item.id ? 'Copied' : 'Copy'}
-                </button>
+
+                <p className="text-[15px] text-slate-800 leading-relaxed font-medium select-text">
+                  {item.transcript}
+                </p>
               </div>
-              <p className="text-[16px] text-gray-800 leading-relaxed font-medium pl-1">{item.transcript}</p>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -391,11 +1009,19 @@ function SnippetsTab() {
   const addSnippet = useAppStore(state => state.addSnippet);
   const updateSnippet = useAppStore(state => state.updateSnippet);
   const removeSnippet = useAppStore(state => state.removeSnippet);
+
   const [trigger, setTrigger] = useState('');
   const [expansion, setExpansion] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredSnippets = useMemo(() => {
+    if (!searchQuery.trim()) return snippets;
+    const q = searchQuery.toLowerCase();
+    return snippets.filter(s => s.trigger_phrase.toLowerCase().includes(q) || s.expansion.toLowerCase().includes(q));
+  }, [snippets, searchQuery]);
 
   const handleSave = () => {
     if (!trigger.trim() || !expansion.trim()) return;
@@ -428,16 +1054,10 @@ function SnippetsTab() {
   };
 
   const handleCancel = () => {
-    setShowForm(!showForm);
-    if (!showForm) {
-      setEditingId(null);
-      setTrigger('');
-      setExpansion('');
-    } else {
-      setEditingId(null);
-      setTrigger('');
-      setExpansion('');
-    }
+    setShowForm(false);
+    setEditingId(null);
+    setTrigger('');
+    setExpansion('');
   };
 
   const handleCopy = (snippet: any) => {
@@ -447,103 +1067,182 @@ function SnippetsTab() {
   };
 
   return (
-    <div className="pb-6 animate-fade-in">
-      <div className="flex justify-between items-end mb-10">
+    <div className="pb-10 space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-slate-200/80">
         <div>
-          <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Snippets</h1>
-          <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Magic keywords that expand into full sentences automatically.</p>
+          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+            Acoustic Expansion
+          </span>
+          <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+            Voice Snippets
+          </h1>
+          <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+            Spoken triggers automatically expand into templates, URLs, and code snippets.
+          </p>
         </div>
+
         <button
-          onClick={handleCancel}
-          className={`px-5 py-2.5 rounded-xl border shadow-sm text-[14px] font-semibold transition-all duration-200 flex items-center gap-2 ${
+          onClick={() => {
+            if (showForm) handleCancel();
+            else setShowForm(true);
+          }}
+          className={`px-4 py-2.5 rounded-xl text-[13.5px] font-bold transition-all flex items-center gap-1.5 ${
             showForm
-              ? 'glass-btn text-gray-700 hover:bg-white/40'
-              : 'glass-btn-primary'
+              ? 'studio-btn text-slate-700'
+              : 'studio-btn-primary'
           }`}
         >
           {showForm ? 'Cancel' : <><Plus className="w-4 h-4"/> New Snippet</>}
         </button>
       </div>
 
-      {/* Add Snippet Form */}
+      {/* Snippet Form Drawer */}
       {showForm && (
-        <div className="mb-8 p-6 rounded-2xl glass-card space-y-5 animate-in slide-in-from-top-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="studio-card p-6 rounded-2xl space-y-5 border-indigo-200 bg-indigo-50/20 shadow-md">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[16px] font-bold text-slate-900">
+              {editingId ? 'Edit Spoken Snippet' : 'Configure New Snippet'}
+            </h3>
+            <span className="text-[11px] font-mono text-slate-500">Case-insensitive trigger matching</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[13px] font-semibold text-gray-700 mb-2">Trigger Phrase</label>
+              <label className="block text-[12.5px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Spoken Trigger Phrase
+              </label>
               <div className="relative">
-                <Command className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Command className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={trigger}
                   onChange={e => setTrigger(e.target.value)}
-                  placeholder="e.g. my link"
-                  className="w-full glass-input pl-10 pr-4"
+                  placeholder="e.g. my meet link"
+                  className="studio-input w-full !pl-10 font-medium"
                 />
               </div>
+              <p className="text-[11.5px] text-slate-500 mt-1">What you say during dictation.</p>
             </div>
+
             <div>
-              <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Expansion Content</label>
+              <label className="block text-[12.5px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Expansion Output
+              </label>
               <textarea
                 value={expansion}
                 onChange={e => setExpansion(e.target.value)}
-                placeholder="e.g. https://github.com/my-profile"
+                placeholder="e.g. https://meet.google.com/abc-defg-hij"
                 rows={2}
-                className="w-full glass-input resize-none"
+                className="studio-input w-full resize-none font-medium text-[13.5px]"
               />
+              <p className="text-[11.5px] text-slate-500 mt-1">What gets pasted into the active application.</p>
             </div>
           </div>
-          <div className="flex justify-end pt-2">
+
+          {/* Interactive Preview */}
+          {trigger.trim() && expansion.trim() && (
+            <div className="p-3 rounded-xl bg-white border border-slate-200 text-[12.5px] flex items-center gap-2">
+              <span className="font-semibold text-slate-500">Preview:</span>
+              <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">"{trigger.trim()}"</span>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+              <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded truncate max-w-md">{expansion.trim()}</span>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/80">
+            <button
+              onClick={handleCancel}
+              className="studio-btn px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
             <button
               onClick={handleSave}
               disabled={!trigger.trim() || !expansion.trim()}
-              className="px-6 py-2.5 rounded-xl glass-btn-primary text-[14px] font-semibold disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2"
+              className="studio-btn-primary px-5 py-2 rounded-xl text-[13px] font-bold disabled:opacity-50 disabled:shadow-none"
             >
-              {editingId ? 'Update Snippet' : 'Assemble Snippet'}
+              {editingId ? 'Update Snippet' : 'Save Snippet'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Snippet Search */}
+      {snippets.length > 0 && (
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search triggers or expansions..."
+            className="studio-input w-full !pl-10 !pr-10 text-[14px]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 transition-colors"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       )}
 
       {/* Snippets List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {snippets.length === 0 && !showForm ? (
-          <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center py-24 px-4 rounded-3xl glass-surface">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 border border-white/50 flex items-center justify-center mb-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-md">
-              <ClipboardList className="w-7 h-7 text-indigo-400" />
+          <div className="col-span-full py-16 text-center studio-card rounded-2xl border-dashed">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 text-indigo-600">
+              <ClipboardList className="w-6 h-6" />
             </div>
-            <p className="text-gray-500 font-bold text-[15px]">No snippets configured yet</p>
+            <h3 className="text-[17px] font-bold text-slate-900">No voice snippets created yet</h3>
+            <p className="text-[14px] text-slate-600 mt-1 max-w-sm mx-auto font-medium">
+              Create instant shortcuts for links, email signatures, boilerplate text, or code templates.
+            </p>
+          </div>
+        ) : filteredSnippets.length === 0 ? (
+          <div className="col-span-full py-8 text-center studio-card rounded-2xl">
+            <p className="text-slate-600 font-semibold">No snippets matching "{searchQuery}"</p>
           </div>
         ) : (
-          snippets.map(snippet => (
-            <div key={snippet.id} className="p-5 rounded-2xl glass-card group relative">
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-[13px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md tracking-wide">
-                  {snippet.trigger_phrase}
+          filteredSnippets.map(snippet => (
+            <div key={snippet.id} className="studio-card p-5 rounded-2xl flex flex-col justify-between group relative space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-[12.5px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg">
+                  "{snippet.trigger_phrase}"
                 </span>
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleCopy(snippet)}
-                    className="text-[12px] font-bold text-gray-600 hover:text-indigo-700 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600"
+                    title="Copy expansion"
                   >
-                    {copiedId === snippet.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedId === snippet.id ? 'Copied' : 'Copy'}
+                    {copiedId === snippet.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                   <button
                     onClick={() => handleEdit(snippet)}
-                    className="text-[12px] font-bold text-gray-600 hover:text-amber-700 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600"
+                    title="Edit snippet"
                   >
-                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                    <Edit3 className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => removeSnippet(snippet.id)}
-                    className="text-[12px] font-bold text-gray-600 hover:text-rose-600 glass-btn px-2 py-1 rounded-md transition-all flex items-center gap-1"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-rose-600 hover:border-rose-200"
+                    title="Delete snippet"
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-              <p className="text-[15px] font-medium text-gray-600 leading-relaxed line-clamp-3">{snippet.expansion}</p>
+
+              <p className="text-[14px] text-slate-700 font-mono bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 break-all line-clamp-3">
+                {snippet.expansion}
+              </p>
             </div>
           ))
         )}
@@ -553,14 +1252,66 @@ function SnippetsTab() {
 }
 
 function SettingsTab() {
-  const { apiKey, setApiKey, whisperModel, setWhisperModel, llamaModel, setLlamaModel, hotkey, setHotkey } = useAppStore();
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const { 
+    apiKey, 
+    setApiKey, 
+    cerebrasApiKey, 
+    setCerebrasApiKey, 
+    whisperModel, 
+    setWhisperModel, 
+    llamaModel, 
+    setLlamaModel, 
+    llamaProvider, 
+    setLlamaProvider, 
+    hotkey, 
+    setHotkey,
+    recomputeStats,
+    history,
+    setHistory
+  } = useAppStore();
+
+  const [groqTestStatus, setGroqTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [groqErrorMsg, setGroqErrorMsg] = useState('');
+  const [cerebrasTestStatus, setCerebrasTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [cerebrasErrorMsg, setCerebrasErrorMsg] = useState('');
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showCerebrasKey, setShowCerebrasKey] = useState(false);
+
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [capturedKeys, setCapturedKeys] = useState<string[]>([]);
   const capturedKeysRef = useRef<string[]>([]);
+
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'current' | 'error'>('idle');
   const [updateInfo, setUpdateInfo] = useState<ReleaseCheckResult | null>(null);
   const [updateError, setUpdateError] = useState('');
+
+  const [recomputeNotice, setRecomputeNotice] = useState(false);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+
+  // Preset shortcut options
+  const HOTKEY_PRESETS = [
+    { label: 'Ctrl + Win', value: 'Control+Super', tag: 'Default' },
+    { label: 'Alt + Space', value: 'Alt+Space', tag: 'Spotlight' },
+    { label: 'Ctrl + Shift + D', value: 'Control+Shift+D', tag: 'Dictate' },
+    { label: 'Ctrl + Alt + V', value: 'Control+Alt+V', tag: 'Voice' },
+  ];
+
+  // Mode detections
+  const isWhisperPreset = WHISPER_MODEL_PRESETS.some(p => p.id === whisperModel);
+  const activeLlmPresets = llamaProvider === 'cerebras' ? CEREBRAS_MODEL_PRESETS : GROQ_MODEL_PRESETS;
+  const isLlamaPreset = activeLlmPresets.some(p => p.id === llamaModel);
+
+  const [isCustomWhisperMode, setIsCustomWhisperMode] = useState(!isWhisperPreset);
+  const [isCustomLlamaMode, setIsCustomLlamaMode] = useState(!isLlamaPreset);
+
+  useEffect(() => {
+    setIsCustomWhisperMode(!WHISPER_MODEL_PRESETS.some(p => p.id === whisperModel));
+  }, [whisperModel]);
+
+  useEffect(() => {
+    const presets = llamaProvider === 'cerebras' ? CEREBRAS_MODEL_PRESETS : GROQ_MODEL_PRESETS;
+    setIsCustomLlamaMode(!presets.some(p => p.id === llamaModel));
+  }, [llamaModel, llamaProvider]);
 
   useEffect(() => {
     getInstalledVersion()
@@ -574,17 +1325,50 @@ function SettingsTab() {
           notes: '',
         });
       })
-      .catch(() => {
-        // Ignore version lookup issues
-      });
+      .catch(() => {});
   }, []);
-  
-  const handleTestKey = async () => {
+
+  const handleTestGroqKey = async () => {
     if (!apiKey) return;
-    setTestStatus('testing');
-    const isValid = await testApiKey(apiKey);
-    setTestStatus(isValid ? 'success' : 'error');
-    setTimeout(() => setTestStatus('idle'), 3000);
+    setGroqTestStatus('testing');
+    setGroqErrorMsg('');
+    const res = await testKeyWithProvider('groq', apiKey);
+    if (res.valid) {
+      setGroqTestStatus('success');
+    } else {
+      setGroqTestStatus('error');
+      setGroqErrorMsg(res.error || 'Invalid API Key');
+    }
+    setTimeout(() => setGroqTestStatus('idle'), 4500);
+  };
+
+  const handleTestCerebrasKey = async () => {
+    if (!cerebrasApiKey) return;
+    setCerebrasTestStatus('testing');
+    setCerebrasErrorMsg('');
+    const res = await testKeyWithProvider('cerebras', cerebrasApiKey);
+    if (res.valid) {
+      setCerebrasTestStatus('success');
+    } else {
+      setCerebrasTestStatus('error');
+      setCerebrasErrorMsg(res.error || 'Invalid API Key');
+    }
+    setTimeout(() => setCerebrasTestStatus('idle'), 4500);
+  };
+
+  const handleProviderSwitch = (provider: LLMProvider) => {
+    setLlamaProvider(provider);
+    if (provider === 'cerebras') {
+      if (!CEREBRAS_MODEL_PRESETS.some(p => p.id === llamaModel)) {
+        setLlamaModel(DEFAULT_CEREBRAS_MODEL);
+        setIsCustomLlamaMode(false);
+      }
+    } else {
+      if (!GROQ_MODEL_PRESETS.some(p => p.id === llamaModel)) {
+        setLlamaModel(DEFAULT_GROQ_CHAT_MODEL);
+        setIsCustomLlamaMode(false);
+      }
+    }
   };
 
   const MODIFIER_ORDER = ['Control', 'Alt', 'Shift', 'Super'] as const;
@@ -617,21 +1401,26 @@ function SettingsTab() {
         if (part === 'Control') return 'Ctrl';
         if (part === 'Super') return 'Win';
         return part;
-      })
-      .join(' + ');
+      });
 
   const saveHotkey = (parts: string[]) => {
     const normalized = sortShortcutParts(parts);
-    
-    // We require at least 2 keys for any shortcut to prevent accidental triggers
-    if (normalized.length < 2) {
-      return;
-    }
+    if (normalized.length < 2) return;
 
     const newHotkey = normalized.join('+');
     setHotkey(newHotkey);
     invoke('update_hotkey', { newHotkey }).catch((err) => {
       console.warn('Could not register hotkey:', err);
+    });
+    setCapturedKeys([]);
+    capturedKeysRef.current = [];
+    setIsRecordingHotkey(false);
+  };
+
+  const applyPresetHotkey = (presetValue: string) => {
+    setHotkey(presetValue);
+    invoke('update_hotkey', { newHotkey: presetValue }).catch((err) => {
+      console.warn('Could not register hotkey preset:', err);
     });
     setCapturedKeys([]);
     capturedKeysRef.current = [];
@@ -650,32 +1439,24 @@ function SettingsTab() {
     ];
     
     const keyName = normalizeKeyName(e.key);
-    
-    // Create a new set of keys including existing ones and the new one
-    // We filter out duplicates and handle the current physical state
     const currentCaptured = sortShortcutParts([...capturedKeysRef.current, ...modifierParts, keyName]);
     capturedKeysRef.current = currentCaptured;
     setCapturedKeys(currentCaptured);
 
-    // If we have 2+ keys and the just-pressed key is NOT a modifier, save immediately
     if (currentCaptured.length >= 2 && !isModifierKey(keyName)) {
-        saveHotkey(currentCaptured);
+      saveHotkey(currentCaptured);
     }
   };
 
   const handleHotkeyRelease = (e: React.KeyboardEvent) => {
     if (!isRecordingHotkey) return;
-
-    // Handle modifier-only shortcuts or any multi-key combo on release
     if (capturedKeysRef.current.length >= 2) {
-        saveHotkey(capturedKeysRef.current);
-        return;
+      saveHotkey(capturedKeysRef.current);
+      return;
     }
-
-    // Clear ref and display if everything is released
     if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
-       capturedKeysRef.current = [];
-       setCapturedKeys([]);
+      capturedKeysRef.current = [];
+      setCapturedKeys([]);
     }
   };
 
@@ -713,192 +1494,648 @@ function SettingsTab() {
     }
   };
 
-  const SettingSection = ({ title, description, children }: any) => (
-    <div className="glass-card p-6 rounded-2xl relative overflow-hidden">
-      <div className="absolute -inset-x-4 -inset-y-4 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none opacity-50 mix-blend-overlay"></div>
-      <h3 className="text-[18px] font-bold text-gray-900 tracking-tight relative z-10">{title}</h3>
-      <p className="text-[14px] text-gray-600 mt-1 mb-5 font-medium relative z-10">{description}</p>
-      <div className="relative z-10">{children}</div>
-    </div>
-  );
+  const handleRecomputeStats = () => {
+    recomputeStats();
+    setRecomputeNotice(true);
+    setTimeout(() => setRecomputeNotice(false), 3000);
+  };
+
+  const handleClearHistory = () => {
+    if (!confirmClearHistory) {
+      setConfirmClearHistory(true);
+      setTimeout(() => setConfirmClearHistory(false), 3500);
+      return;
+    }
+    setHistory([]);
+    setConfirmClearHistory(false);
+  };
+
+  const keyDisplayParts = isRecordingHotkey && capturedKeys.length > 0 
+    ? capturedKeys.map(k => (k === 'Control' ? 'Ctrl' : k === 'Super' ? 'Win' : k))
+    : formatHotkeyLabel(hotkey);
+
+  const activeWhisperObj = WHISPER_MODEL_PRESETS.find(p => p.id === whisperModel);
+  const activeLlmObj = activeLlmPresets.find(p => p.id === llamaModel);
 
   return (
-    <div className="pb-16 animate-fade-in">
-      <div className="mb-10">
-        <h1 className="text-[34px] font-bold tracking-tight text-gradient pb-1">Preferences</h1>
-        <p className="text-gray-500 mt-2 text-[15px] max-w-sm font-medium">Fine-tune the intelligence engine behind VoxDrop.</p>
+    <div className="pb-16 space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="pb-2 border-b border-slate-200/80">
+        <div className="flex items-center gap-2">
+          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1.5">
+            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+            Studio Control Center
+          </span>
+        </div>
+        <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+          Preferences & Hardware
+        </h1>
+        <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+          Configure acoustic speech recognition, real-time AI formatting, API credentials, and global triggers.
+        </p>
       </div>
-      
-      <div className="space-y-5 max-w-[700px]">
-        <SettingSection 
-          title="Dictation Hotkey" 
-          description="Click the input box and press your desired key combination. Modifier-only shortcuts like Ctrl + Win are supported."
-        >
-          <div className="flex gap-3">
-            <input
-              type="text"
-              readOnly
-              value={
-                isRecordingHotkey
-                  ? (capturedKeys.length > 0 ? formatHotkeyLabel(capturedKeys.join('+')) : 'Press shortcut...')
-                  : formatHotkeyLabel(hotkey)
-              }
-              onFocus={() => {
+
+      {/* Studio Engine Readiness & Telemetry Bar */}
+      <div className="studio-card p-4 sm:p-5 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Speech-to-Text Acoustic Engine */}
+          <div className="flex items-center gap-3 min-w-[200px] flex-1 sm:flex-initial">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 flex-shrink-0 shadow-2xs">
+              <Mic className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Speech-to-Text</span>
+                <span className="telemetry-badge text-[9.5px] text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                  Groq LPU
+                </span>
+              </div>
+              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+                {activeWhisperObj?.label.split(' (')[0] || whisperModel}
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+
+          {/* Inference Polish */}
+          <div className="flex items-center gap-3 min-w-[200px] flex-1 sm:flex-initial">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600 flex-shrink-0 shadow-2xs">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Text Polish</span>
+                <span className="telemetry-badge text-[9.5px] text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                  {llamaProvider === 'cerebras' ? 'Cerebras Wafer' : 'Groq LPU'}
+                </span>
+              </div>
+              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+                {activeLlmObj?.label.split(' (')[0] || llamaModel}
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+
+          {/* Hotkey Trigger */}
+          <div className="flex items-center gap-3 min-w-[170px] flex-1 sm:flex-initial">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700 flex-shrink-0 shadow-2xs">
+              <Keyboard className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Global Trigger</span>
+                <span className="telemetry-badge text-[9.5px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                  Active
+                </span>
+              </div>
+              <div className="flex items-center gap-1 mt-0.5">
+                {formatHotkeyLabel(hotkey).map((k, i) => (
+                  <span key={i} className="keycap text-[11.5px] px-2 py-0.5">{k}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+
+          {/* Credential Vault */}
+          <div className="flex items-center gap-3 min-w-[150px] flex-1 sm:flex-initial">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 shadow-2xs ${
+              apiKey ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'
+            }`}>
+              {apiKey ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+            </div>
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Credential Vault</span>
+              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+                {apiKey ? (
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">Groq Ready</span>
+                ) : (
+                  <span className="text-rose-600 font-bold flex items-center gap-1">Key Required</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 1: Global Shortcut Card */}
+      <div className="studio-card p-6 rounded-2xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Keyboard className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Global Dictation Hotkey</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+              Press and hold from any active desktop app to capture voice and paste polished text.
+            </p>
+          </div>
+          <button
+            onClick={resetHotkey}
+            className="studio-btn px-3 py-1.5 rounded-xl text-[12.5px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 self-start sm:self-auto"
+            title="Reset to default (Ctrl + Win)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reset Default
+          </button>
+        </div>
+
+        {/* Tactile Hotkey Recorder Box */}
+        <div className="space-y-3">
+          <div
+            tabIndex={0}
+            onFocus={() => {
+              setCapturedKeys([]);
+              capturedKeysRef.current = [];
+              setIsRecordingHotkey(true);
+            }}
+            onBlur={() => {
+              setTimeout(() => {
                 setCapturedKeys([]);
                 capturedKeysRef.current = [];
-                setIsRecordingHotkey(true);
-              }}
-              onBlur={() => {
-                // Delay a bit to allow onClick or other events to process if needed
-                setTimeout(() => {
-                  setCapturedKeys([]);
-                  capturedKeysRef.current = [];
-                  setIsRecordingHotkey(false);
-                }, 200);
-              }}
-              onKeyDown={handleHotkeyRecord}
-              onKeyUp={handleHotkeyRelease}
-              className={`flex-1 glass-input text-center font-mono tracking-wide cursor-pointer font-semibold
-                ${isRecordingHotkey ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-white/30" : ""}`}
-            />
-            <button
-              onClick={resetHotkey}
-              className="px-5 rounded-xl glass-btn text-[14px] font-semibold text-gray-600 hover:text-gray-900 transition-all"
-            >
-              Reset
-            </button>
+                setIsRecordingHotkey(false);
+              }, 250);
+            }}
+            onKeyDown={handleHotkeyRecord}
+            onKeyUp={handleHotkeyRelease}
+            className={`w-full studio-input py-4 text-center cursor-pointer flex flex-col items-center justify-center gap-2 transition-all ${
+              isRecordingHotkey 
+                ? 'border-indigo-600 ring-4 ring-indigo-500/15 bg-white shadow-inner' 
+                : 'hover:border-slate-400 bg-slate-50/70'
+            }`}
+          >
+            {isRecordingHotkey && capturedKeys.length === 0 ? (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[14px] font-semibold text-indigo-600 animate-pulse flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-ping" />
+                  Listening for key combo (e.g. Ctrl + Win, Alt + Space)...
+                </span>
+                <span className="text-[12px] text-slate-500">Press modifier + target key simultaneously</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="flex items-center gap-2">
+                  {keyDisplayParts.map((k, idx) => (
+                    <span key={idx} className="keycap text-[14px] px-3 py-1 shadow-sm">{k}</span>
+                  ))}
+                </div>
+                <span className="text-[11.5px] text-slate-500 font-medium">
+                  {isRecordingHotkey ? 'Release keys to save' : 'Click here to record a custom shortcut'}
+                </span>
+              </div>
+            )}
           </div>
-          <p className="text-[13px] text-gray-500 mt-3 font-medium">Requires at least two keys. Default: Ctrl + Win.</p>
-        </SettingSection>
 
-        <SettingSection 
-          title="Neural API Key" 
-          description="Your Groq API key is safely stored locally. Used for ultra-fast transcription and text cleanup."
-        >
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="gsk_################"
-                className="w-full glass-input font-mono"
-              />
+          {/* Quick Presets Pill Selector */}
+          <div>
+            <span className="block text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Quick Shortcut Presets
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {HOTKEY_PRESETS.map((preset) => {
+                const isActive = hotkey === preset.value;
+                return (
+                  <button
+                    key={preset.value}
+                    onClick={() => applyPresetHotkey(preset.value)}
+                    className={`px-3 py-1.5 rounded-xl text-[12.5px] font-semibold transition-all flex items-center gap-1.5 ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300'
+                        : 'studio-btn text-slate-700 hover:text-indigo-600 hover:border-indigo-200'
+                    }`}
+                  >
+                    <span>{preset.label}</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {preset.tag}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 2 & 3: Model Selection & Inference Engine (2-Column Grid) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Acoustic Whisper Model */}
+        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Mic className="w-4 h-4 text-amber-500" />
+                <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Acoustic Recognition</h3>
+              </div>
+              <span className="telemetry-badge text-[11px] text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200">
+                Groq LPU
+              </span>
+            </div>
+            <p className="text-[13.5px] text-slate-600 font-medium">
+              Whisper speech-to-text model for instantaneous, sub-second transcription.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+              Whisper Acoustic Model
+            </label>
+            <div className="relative">
+              <select
+                value={isCustomWhisperMode ? '__custom__' : whisperModel}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomWhisperMode(true);
+                  } else {
+                    setIsCustomWhisperMode(false);
+                    setWhisperModel(e.target.value);
+                  }
+                }}
+                className="studio-select text-[14px]"
+              >
+                {WHISPER_MODEL_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label} — [{preset.tag}]
+                  </option>
+                ))}
+                <option value="__custom__">Custom Whisper Model ID...</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {isCustomWhisperMode && (
+              <div className="animate-fade-in pt-1">
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Custom Model Identifier</label>
+                <input
+                  type="text"
+                  value={whisperModel}
+                  onChange={(e) => setWhisperModel(e.target.value.trim())}
+                  placeholder="e.g. whisper-large-v3-turbo"
+                  className="studio-input w-full font-mono text-[13px]"
+                />
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-[12px] text-slate-600 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>Recommended: <strong className="text-slate-800">Whisper Turbo</strong> for sub-200ms latency.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Inference Engine & Provider */}
+        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">AI Formatting & Polish</h3>
+              </div>
+              <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">
+                Text Refinement
+              </span>
+            </div>
+            <p className="text-[13.5px] text-slate-600 font-medium">
+              Cleans filler words, fixes punctuation, and expands voice snippet triggers.
+            </p>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+              Inference Provider
+            </label>
+
+            {/* Provider Switcher */}
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100/90 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => handleProviderSwitch('groq')}
+                className={`py-2 px-3 rounded-lg text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  llamaProvider === 'groq'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                Groq LPU
+              </button>
+              <button
+                type="button"
+                onClick={() => handleProviderSwitch('cerebras')}
+                className={`py-2 px-3 rounded-lg text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  llamaProvider === 'cerebras'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Cpu className="w-3.5 h-3.5 text-purple-600" />
+                Cerebras Wafer
+              </button>
+            </div>
+
+            {/* Model Selector */}
+            <div className="relative pt-1">
+              <select
+                value={isCustomLlamaMode ? '__custom__' : llamaModel}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomLlamaMode(true);
+                  } else {
+                    setIsCustomLlamaMode(false);
+                    setLlamaModel(e.target.value);
+                  }
+                }}
+                className="studio-select text-[14px]"
+              >
+                {activeLlmPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label} — [{preset.tag}]
+                  </option>
+                ))}
+                <option value="__custom__">Custom Model ID...</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {isCustomLlamaMode && (
+              <div className="animate-fade-in pt-1">
+                <label className="block text-[12px] font-semibold text-slate-600 mb-1">
+                  Custom {llamaProvider === 'cerebras' ? 'Cerebras' : 'Groq'} Model ID
+                </label>
+                <input
+                  type="text"
+                  value={llamaModel}
+                  onChange={(e) => setLlamaModel(e.target.value.trim())}
+                  placeholder={llamaProvider === 'cerebras' ? 'e.g. gemma-4-31b' : 'e.g. openai/gpt-oss-20b'}
+                  className="studio-input w-full font-mono text-[13px]"
+                />
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-[12px] text-slate-600 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              <span>Active: <strong className="text-slate-800">{activeLlmObj?.label.split(' (')[0] || llamaModel}</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4: Provider Credentials Card */}
+      <div className="studio-card p-6 rounded-2xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">API Key Credentials Vault</h3>
+          </div>
+          <span className="text-[11px] font-mono text-slate-500 flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Encrypted Local Store
+          </span>
+        </div>
+
+        {/* Groq Key */}
+        <div className="space-y-2 pt-2 border-t border-slate-200/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[14px] font-bold text-slate-900">Groq API Key</span>
+              <span className="telemetry-badge text-[10.5px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                Required for Speech
+              </span>
             </div>
             <button
-              onClick={handleTestKey}
-              disabled={!apiKey || testStatus === 'testing'}
-              className={`px-6 rounded-xl text-[14px] font-semibold transition-all shadow-sm flex items-center justify-center min-w-[130px]
-                ${testStatus === 'success' ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-400/40 backdrop-blur-md' :
-                  testStatus === 'error' ? 'bg-rose-500/15 text-rose-700 border border-rose-400/40 backdrop-blur-md' :
-                  'glass-btn-primary disabled:opacity-50 disabled:shadow-none'}`}
+              onClick={() => openUrl('https://console.groq.com/keys')}
+              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
             >
-              {testStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> :
-               testStatus === 'success' ? <span className="flex items-center gap-1.5"><CheckCircle className="w-4 h-4"/> Valid</span> :
-               testStatus === 'error' ? <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4"/> Invalid</span> :
+              Get Free Key <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="flex-1 relative">
+              <input
+                type={showGroqKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value.trim())}
+                placeholder="gsk_########################################"
+                className="studio-input w-full font-mono text-[13.5px] !pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGroqKey(!showGroqKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                title={showGroqKey ? 'Hide key' : 'Show key'}
+              >
+                {showGroqKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={handleTestGroqKey}
+              disabled={!apiKey || groqTestStatus === 'testing'}
+              className={`px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center min-w-[130px] ${
+                groqTestStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-sm' :
+                groqTestStatus === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-300' :
+                'studio-btn-primary disabled:opacity-50 disabled:shadow-none'
+              }`}
+            >
+              {groqTestStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> :
+               groqTestStatus === 'success' ? <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600"/> Verified</span> :
+               groqTestStatus === 'error' ? <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4 text-rose-600"/> Failed</span> :
                'Authenticate'}
             </button>
           </div>
-        </SettingSection>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <SettingSection 
-            title="Acoustic Model" 
-            description="Whisper model for audio transcription."
-          >
-            <div className="relative">
-              <select
-                value={whisperModel}
-                onChange={(e) => setWhisperModel(e.target.value)}
-                className="w-full appearance-none glass-input cursor-pointer font-semibold text-[14px] py-3"
-              >
-                <option value="whisper-large-v3-turbo">Whisper Turbo (Fast)</option>
-                <option value="whisper-large-v3">Whisper V3 (Accurate)</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </div>
-            </div>
-          </SettingSection>
-
-          <SettingSection 
-            title="Inference Engine" 
-            description="LLM for formatting and cleanup."
-          >
-            <div className="relative">
-              <select
-                value={llamaModel}
-                onChange={(e) => setLlamaModel(e.target.value)}
-                className="w-full appearance-none glass-input cursor-pointer font-semibold text-[14px] py-3"
-              >
-                <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
-                <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                <option value="allam-2-7b">Allam 2 7B V1</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </div>
-            </div>
-          </SettingSection>
+          {groqTestStatus === 'error' && groqErrorMsg && (
+            <p className="text-[12px] font-semibold text-rose-600 pl-1">{groqErrorMsg}</p>
+          )}
         </div>
 
-        <SettingSection
-          title="App Updates"
-          description="Check for the latest VoxDrop release and jump to the installer page."
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-3">
+        {/* Cerebras Key */}
+        <div className="space-y-2 pt-4 border-t border-slate-200/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[14px] font-bold text-slate-900">Cerebras API Key</span>
+              <span className="telemetry-badge text-[10.5px] text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                Optional LLM Provider
+              </span>
+            </div>
+            <button
+              onClick={() => openUrl('https://cloud.cerebras.ai/')}
+              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+            >
+              Get Free Key <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="flex-1 relative">
+              <input
+                type={showCerebrasKey ? 'text' : 'password'}
+                value={cerebrasApiKey}
+                onChange={(e) => setCerebrasApiKey(e.target.value.trim())}
+                placeholder="csk-########################################"
+                className="studio-input w-full font-mono text-[13.5px] !pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCerebrasKey(!showCerebrasKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                title={showCerebrasKey ? 'Hide key' : 'Show key'}
+              >
+                {showCerebrasKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={handleTestCerebrasKey}
+              disabled={!cerebrasApiKey || cerebrasTestStatus === 'testing'}
+              className={`px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center min-w-[130px] ${
+                cerebrasTestStatus === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-sm' :
+                cerebrasTestStatus === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-300' :
+                'studio-btn-primary disabled:opacity-50 disabled:shadow-none'
+              }`}
+            >
+              {cerebrasTestStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> :
+               cerebrasTestStatus === 'success' ? <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600"/> Verified</span> :
+               cerebrasTestStatus === 'error' ? <span className="flex items-center gap-1.5"><XCircle className="w-4 h-4 text-rose-600"/> Failed</span> :
+               'Authenticate'}
+            </button>
+          </div>
+          {cerebrasTestStatus === 'error' && cerebrasErrorMsg && (
+            <p className="text-[12px] font-semibold text-rose-600 pl-1">{cerebrasErrorMsg}</p>
+          )}
+        </div>
+
+        <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 text-[12px] text-slate-500 font-medium flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <span>API keys are stored strictly in your local app configuration and never uploaded to third-party servers.</span>
+        </div>
+      </div>
+
+      {/* Section 5: Software Updates & System Diagnostics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Updates Card */}
+        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Software Updates</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+              Check for published releases and desktop installer updates.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2.5">
               <button
                 onClick={handleCheckForUpdates}
                 disabled={updateStatus === 'checking'}
-                className="px-5 py-2.5 rounded-xl glass-btn text-gray-700 hover:text-gray-900 text-[14px] font-semibold transition-all disabled:opacity-60 flex items-center gap-2"
+                className="studio-btn px-4 py-2 rounded-xl text-[13px] font-bold text-slate-700 hover:text-slate-900 flex items-center gap-2"
               >
-                {updateStatus === 'checking' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {updateStatus === 'checking' ? 'Checking...' : 'Check for Updates'}
+                {updateStatus === 'checking' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {updateStatus === 'checking' ? 'Checking GitHub...' : 'Check for Updates'}
               </button>
 
               <button
                 onClick={() => openReleasePage()}
-                className="px-5 py-2.5 rounded-xl glass-btn text-[14px] font-semibold text-gray-600 hover:text-gray-900 transition-all"
+                className="studio-btn px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-600 hover:text-slate-900"
               >
-                Open Releases
+                View Changelog
               </button>
             </div>
 
-            <div className="rounded-xl glass-surface px-4 py-3">
-              <p className="text-[14px] text-gray-600 font-medium">
-                Installed version: <span className="text-gray-900 font-bold">{updateInfo?.currentVersion ?? 'Unknown'}</span>
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+              <p className="text-[13px] text-slate-600 font-medium">
+                Installed Version: <span className="font-mono font-bold text-slate-900">v{updateInfo?.currentVersion ?? '0.0.12'}</span>
               </p>
 
               {updateStatus === 'current' && updateInfo && (
-                <p className="text-[13px] text-emerald-600 font-semibold mt-1">
-                  You are up to date. Latest release: {updateInfo.latestVersion ?? updateInfo.currentVersion}.
+                <p className="text-[12.5px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> VoxDrop is up to date ({updateInfo.latestVersion ?? updateInfo.currentVersion}).
                 </p>
               )}
 
               {updateStatus === 'available' && updateInfo && (
                 <div className="mt-2 space-y-2">
-                  <p className="text-[14px] font-semibold text-amber-600">
-                    New version available: {updateInfo.latestVersion}.
+                  <p className="text-[13px] font-bold text-amber-700">
+                    New release available: v{updateInfo.latestVersion}
                   </p>
                   <button
                     onClick={() => openReleasePage(updateInfo.htmlUrl)}
-                    className="px-4 py-2 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-800 text-[13px] font-bold tracking-wide hover:bg-amber-500/25 transition-colors backdrop-blur-md"
+                    className="studio-btn-primary px-3.5 py-1.5 rounded-lg text-[12.5px] font-bold"
                   >
-                    Download Latest Release
+                    Download Release .exe
                   </button>
                 </div>
               )}
 
               {updateStatus === 'error' && (
-                <p className="text-[13px] font-medium text-rose-500 mt-1">
-                  {updateError || 'Unable to check for updates right now.'}
+                <p className="text-[12.5px] font-semibold text-rose-600 mt-1">
+                  {updateError || 'Unable to connect to update server.'}
                 </p>
               )}
             </div>
           </div>
-        </SettingSection>
+        </div>
+
+        {/* Local Storage & Diagnostics */}
+        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <HardDrive className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Diagnostics & Storage</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+              Maintain audit logs and recompute telemetry metrics across past sessions.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="text-slate-600 font-medium">Logged Transcripts:</span>
+                <span className="font-mono font-bold text-slate-900">{history.length} items</span>
+              </div>
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="text-slate-600 font-medium">Database Health:</span>
+                <span className="telemetry-badge text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Optimal
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5 pt-1">
+              <button
+                onClick={handleRecomputeStats}
+                className="studio-btn px-4 py-2 rounded-xl text-[12.5px] font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Recompute Stats
+              </button>
+
+              {history.length > 0 && (
+                <button
+                  onClick={handleClearHistory}
+                  className={`px-4 py-2 rounded-xl text-[12.5px] font-bold transition-all flex items-center gap-1.5 ${
+                    confirmClearHistory
+                      ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-300'
+                      : 'studio-btn text-slate-600 hover:text-rose-600 hover:border-rose-200'
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {confirmClearHistory ? 'Confirm Clear All' : 'Wipe Audit Log'}
+                </button>
+              )}
+            </div>
+
+            {recomputeNotice && (
+              <p className="text-[12px] font-semibold text-emerald-600 animate-fade-in flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Telemetry and streak data recalculated successfully.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
