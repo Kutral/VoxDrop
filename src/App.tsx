@@ -34,12 +34,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Show the real UI as soon as hydration completes — no artificial delay.
     if (hydrated && windowLabel) {
-      // Small delay to prevent flash of content and ensure smooth loading animation
-      const timer = setTimeout(() => {
-        setShowLoading(false);
-      }, 750);
-      return () => clearTimeout(timer);
+      setShowLoading(false);
     }
   }, [hydrated, windowLabel]);
 
@@ -52,18 +49,17 @@ function App() {
   if (showLoading) {
     return (
       <div className="w-screen h-screen flex flex-col items-center justify-center studio-app text-slate-900 overflow-hidden relative">
-        {/* Subtle Ambient Lighting */}
+        {/* Subtle Ambient Lighting (static — animating huge blur layers is GPU-expensive during startup) */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-          <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[55%] rounded-full bg-indigo-200/30 blur-[120px] animate-pulse" />
-          <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[55%] rounded-full bg-blue-100/40 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+          <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[55%] rounded-full bg-indigo-200/30 blur-[120px]" />
+          <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[55%] rounded-full bg-blue-100/40 blur-[120px]" />
         </div>
 
         {/* Studio Loading Panel */}
         <div className="relative z-10 flex flex-col items-center gap-6 p-8 rounded-3xl studio-card max-w-sm w-full mx-4 shadow-xl animate-fade-in">
           {/* Logo with pulse rings */}
           <div className="relative flex items-center justify-center w-20 h-20">
-            <div className="absolute inset-0 rounded-2xl bg-indigo-500/10 animate-ping" />
-            <div className="absolute inset-2 rounded-2xl bg-indigo-500/15 animate-pulse" style={{ animationDelay: '0.5s' }} />
+            <div className="absolute inset-2 rounded-2xl bg-indigo-500/15 animate-pulse" />
             <div className="relative w-16 h-16 rounded-2xl overflow-hidden shadow-md border border-slate-200 bg-white p-2 flex items-center justify-center">
               <img src="/app-icon.png" alt="VoxDrop Logo" className="w-full h-full object-cover" />
             </div>

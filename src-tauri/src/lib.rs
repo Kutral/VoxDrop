@@ -14,6 +14,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const DEFAULT_HOTKEY: &str = "Control+Super";
+const DEFAULT_WINDOW_WIDTH: f64 = 720.0;
+const DEFAULT_WINDOW_HEIGHT: f64 = 780.0;
 const TRAY_ID: &str = "voxdrop-tray";
 const TRAY_SHOW_ID: &str = "show";
 const TRAY_QUIT_ID: &str = "quit";
@@ -41,11 +43,6 @@ fn hotkey_is_modifier_only(value: &str) -> bool {
 
 fn force_present_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     let _ = window.set_skip_taskbar(false);
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
-        width: 800.0,
-        height: 840.0,
-    }));
-    let _ = window.center();
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
@@ -97,6 +94,59 @@ fn force_present_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     }
 }
 
+/// Clamp the window into the monitor's work area (screen minus taskbar).
+/// A window taller than the work area gets pushed off-screen by Windows,
+/// hiding the title bar and its minimize/close buttons.
+fn fit_window_to_work_area<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let monitor = match window.current_monitor() {
+        Ok(Some(monitor)) => monitor,
+        _ => match window.primary_monitor() {
+            Ok(Some(monitor)) => monitor,
+            _ => return,
+        },
+    };
+    let Ok(outer) = window.outer_size() else {
+        return;
+    };
+    let Ok(inner) = window.inner_size() else {
+        return;
+    };
+    let work = monitor.work_area();
+    // Use the monitor's scale: the window's own scale_factor can still report
+    // the creation-time (pre-WM_DPICHANGED) value during early startup.
+    let scale = monitor.scale_factor();
+
+    // `set_size` sets the client size while `outer_size` includes the title bar
+    // and borders — reserve that chrome so the visible frame fits the work area.
+    let chrome_width = outer.width.saturating_sub(inner.width);
+    let chrome_height = outer.height.saturating_sub(inner.height);
+
+    let available_inner_width = work.size.width.saturating_sub(chrome_width);
+    let available_inner_height = work.size.height.saturating_sub(chrome_height);
+
+    // Preferred size from the window config at the current scale — creation-time
+    // DPI quirks can leave the window smaller than configured, and a config size
+    // taller than the work area gets its title bar pushed off-screen by Windows.
+    let desired_inner_width = (DEFAULT_WINDOW_WIDTH * scale) as u32;
+    let desired_inner_height = (DEFAULT_WINDOW_HEIGHT * scale) as u32;
+
+    let target_inner_width = desired_inner_width.min(available_inner_width);
+    let target_inner_height = desired_inner_height.min(available_inner_height);
+
+    if target_inner_width != inner.width || target_inner_height != inner.height {
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
+            target_inner_width,
+            target_inner_height,
+        )));
+    }
+
+    let final_outer_width = target_inner_width + chrome_width;
+    let final_outer_height = target_inner_height + chrome_height;
+    let x = work.position.x + ((work.size.width as i32 - final_outer_width as i32) / 2).max(0);
+    let y = work.position.y + ((work.size.height as i32 - final_outer_height as i32) / 2).max(0);
+    let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+}
+
 fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         eprintln!("[window] show_main_window");
@@ -119,7 +169,8 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
         .skip_taskbar(true)
         .visible(false)
         .focused(false)
-        .resizable(false);
+        .resizable(false)
+        .transparent(true);
 
     match builder.build() {
         Ok(window) => {
@@ -133,11 +184,7 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
     }
 }
 
-fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    let Some(window) = ensure_pill_window(app) else {
-        return;
-    };
-
+fn position_and_show_pill<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     if let Ok(Some(monitor)) = window.primary_monitor() {
         let screen_size = monitor.size();
         let scale = monitor.scale_factor();
@@ -148,6 +195,22 @@ fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
     }
     let _ = window.show();
+}
+
+fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("pill") {
+        position_and_show_pill(&window);
+        return;
+    }
+
+    // Pill was never created (or creation failed earlier): build it on the main
+    // thread, then position and show it.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = ensure_pill_window(&handle) {
+            position_and_show_pill(&window);
+        }
+    });
 }
 
 #[tauri::command]
@@ -280,42 +343,77 @@ pub fn run() {
                 window.outer_position()
             );
             force_present_window(&window);
+            fit_window_to_work_area(&window);
         } else {
             eprintln!("[window] main window was not created from config");
         }
 
-        // Listen for pill-hide events from the frontend to move the window offscreen reliably
+        // Re-fit once the window has settled: a late WM_DPICHANGED rescale right
+        // after launch can push the frame back outside the work area.
+        let app_handle5 = app.handle().clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            if let Some(window) = app_handle5.get_webview_window("main") {
+                fit_window_to_work_area(&window);
+            }
+        });
+
+        // Pre-create the dictation pill in the background (hidden) so the first
+        // hotkey press doesn't pay WebView2 window-creation latency. Deferred a
+        // couple of seconds and built on the main thread to avoid the startup
+        // window-creation failures that lazy creation in config caused on Windows.
+        let app_handle4 = app.handle().clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if app_handle4.get_webview_window("pill").is_some() {
+                return;
+            }
+            let handle = app_handle4.clone();
+            let _ = app_handle4.run_on_main_thread(move || {
+                if handle.get_webview_window("pill").is_none() && ensure_pill_window(&handle).is_some() {
+                    eprintln!("[window] pre-created pill");
+                }
+            });
+        });
+
+        // Listen for pill-hide events from the frontend to hide the window once
+        // its exit animation finished. A hidden webview stops compositing; an
+        // offscreen-but-visible one kept rendering in the background forever.
         let app_handle = app.handle().clone();
         app.listen("pill-hide", move |_event| {
             if let Some(window) = app_handle.get_webview_window("pill") {
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                    x: -9999.0,
-                    y: -9999.0,
-                }));
+                let _ = window.hide();
             }
         });
 
         let app_handle3 = app.handle().clone();
         app.listen("shortcut-down", move |_event| {
-            show_pill_window(&app_handle3);
+            // This listener runs synchronously on whatever thread calls `emit` —
+            // including the low-level keyboard hook thread. Blocking there makes
+            // Windows silently drop the hook (hotkey dies) and lags ALL system
+            // input, so the capture work runs on its own thread.
+            let app_handle = app_handle3.clone();
+            std::thread::spawn(move || {
+                show_pill_window(&app_handle);
 
-            // Immediate recording start and system mute in Rust
-            let audio_state = app_handle3.state::<std::sync::Mutex<audio::AudioState>>();
-            let did_start = match audio::start_recording_internal(&audio_state) {
-                Ok(did_start) => did_start,
-                Err(err) => {
-                    eprintln!("[audio] Failed to start recording: {}", err);
+                // Immediate recording start and system mute in Rust
+                let audio_state = app_handle.state::<std::sync::Mutex<audio::AudioState>>();
+                let did_start = match audio::start_recording_internal(&audio_state) {
+                    Ok(did_start) => did_start,
+                    Err(err) => {
+                        eprintln!("[audio] Failed to start recording: {}", err);
+                        return;
+                    }
+                };
+                if !did_start {
                     return;
                 }
-            };
-            if !did_start {
-                return;
-            }
 
-            let did_mute = audio::mute_system_internal().unwrap_or(false);
+                let did_mute = audio::mute_system_internal().unwrap_or(false);
 
-            // Notify frontend about the mute state so it can unmute later
-            let _ = app_handle3.emit("audio-muted", did_mute);
+                // Notify frontend about the mute state so it can unmute later
+                let _ = app_handle.emit("audio-muted", did_mute);
+            });
         });
 
         // Relay history-update from pill window to all windows (JS emit only reaches Rust)

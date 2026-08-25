@@ -2,6 +2,7 @@
 mod imp {
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::{channel, Sender};
     use std::sync::{Mutex, OnceLock};
 
     use tauri::{AppHandle, Emitter};
@@ -25,11 +26,17 @@ mod imp {
     const VK_LWIN: u16 = 0x5B;
     const VK_RWIN: u16 = 0x5C;
 
+    /// Events queued from the hook callback to the worker thread that owns `emit`.
+    enum ShortcutSignal {
+        Down,
+        Up,
+    }
+
     static SHARED_STATE: OnceLock<SharedState> = OnceLock::new();
 
     struct SharedState {
-        hotkey: Mutex<String>,
-        app: AppHandle,
+        hotkey: Mutex<Option<ModifierHotkey>>,
+        shortcut_tx: Sender<ShortcutSignal>,
         is_active: AtomicBool,
         ctrl_down: AtomicBool,
         alt_down: AtomicBool,
@@ -136,15 +143,36 @@ mod imp {
     }
 
     pub fn install(app: AppHandle) {
+        let (shortcut_tx, shortcut_rx) = channel::<ShortcutSignal>();
+
         let _ = SHARED_STATE.set(SharedState {
-            hotkey: Mutex::new(String::new()),
-            app,
+            hotkey: Mutex::new(None),
+            shortcut_tx,
             is_active: AtomicBool::new(false),
             ctrl_down: AtomicBool::new(false),
             alt_down: AtomicBool::new(false),
             shift_down: AtomicBool::new(false),
             super_down: AtomicBool::new(false),
             main_keys_down: Mutex::new(HashSet::new()),
+        });
+
+        // Worker thread that owns `emit`: Tauri delivers events to Rust listeners
+        // synchronously on the emitting thread, so emitting from inside the hook
+        // callback would run heavy listeners (window creation, audio setup,
+        // blocking WinRT calls) on it. A slow LL hook callback makes Windows
+        // silently remove the hook — killing the hotkey — and delays every
+        // keystroke system-wide. The callback now only queues a tiny signal.
+        std::thread::spawn(move || {
+            while let Ok(signal) = shortcut_rx.recv() {
+                match signal {
+                    ShortcutSignal::Down => {
+                        let _ = app.emit("shortcut-down", ());
+                    }
+                    ShortcutSignal::Up => {
+                        let _ = app.emit("shortcut-up", ());
+                    }
+                }
+            }
         });
 
         std::thread::spawn(move || unsafe {
@@ -183,8 +211,20 @@ mod imp {
 
     pub fn set_hotkey(value: &str) {
         if let Some(state) = SHARED_STATE.get() {
+            let parsed = if value.trim().is_empty() {
+                None
+            } else {
+                match ModifierHotkey::parse(value) {
+                    Some(hotkey) => Some(hotkey),
+                    None => {
+                        eprintln!("[hotkey] Failed to parse hotkey '{value}'");
+                        None
+                    }
+                }
+            };
+
             if let Ok(mut hotkey) = state.hotkey.lock() {
-                *hotkey = value.to_string();
+                *hotkey = parsed;
             }
             state.is_active.store(false, Ordering::SeqCst);
         }
@@ -229,21 +269,21 @@ mod imp {
                         }
                     }
 
+                    // Pre-parsed in `set_hotkey` — no string parsing on keystrokes.
                     let configured_hotkey = state
                         .hotkey
                         .lock()
                         .ok()
-                        .map(|value| value.clone())
-                        .unwrap_or_default();
+                        .and_then(|guard| guard.clone());
 
-                    if let Some(modifier_hotkey) = ModifierHotkey::parse(&configured_hotkey) {
+                    if let Some(modifier_hotkey) = configured_hotkey {
                         let should_be_active = modifier_hotkey.matches(state);
                         let was_active = state.is_active.swap(should_be_active, Ordering::SeqCst);
 
                         if should_be_active && !was_active {
-                            let _ = state.app.emit("shortcut-down", ());
+                            let _ = state.shortcut_tx.send(ShortcutSignal::Down);
                         } else if !should_be_active && was_active {
-                            let _ = state.app.emit("shortcut-up", ());
+                            let _ = state.shortcut_tx.send(ShortcutSignal::Up);
                         }
                     }
                 }

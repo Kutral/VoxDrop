@@ -196,6 +196,28 @@ pub fn start_recording_internal(state: &Mutex<AudioState>) -> Result<bool, Strin
         }
     }
 
+    // Health-check the parked stream: after sleep/resume or an audio device
+    // change the old stream can be permanently dead, which made the hotkey
+    // appear broken until the app was restarted. Probe it, rebuild once if
+    // dead, and re-park it paused either way (mic stays released while idle).
+    let stream_dead = {
+        let mut state_lock = state.lock().unwrap();
+        match state_lock.stream.as_ref() {
+            Some(stream) => {
+                let alive = stream.0.play().is_ok() && stream.0.pause().is_ok();
+                if !alive {
+                    state_lock.stream = None;
+                }
+                !alive
+            }
+            None => false,
+        }
+    };
+    if stream_dead {
+        eprintln!("[audio] Existing stream failed health check; rebuilding");
+        setup_audio(state)?;
+    }
+
     let state_lock = state.lock().unwrap();
 
     if state_lock.is_recording.swap(true, Ordering::SeqCst) {
