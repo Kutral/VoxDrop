@@ -1,0 +1,32 @@
+<svg width="1200" height="180" viewBox="0 0 1200 180" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, Helvetica, sans-serif">
+  <!-- you say -->
+  <rect x="60" y="30" width="330" height="104" rx="18" fill="#FFFFFF" stroke="#E5E9F0" stroke-width="1.5"/>
+  <text x="86" y="60" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="700" letter-spacing="2" fill="#94A3B8">YOU SAY</text>
+  <text x="86" y="96" font-family="Consolas, 'Courier New', monospace" font-size="18" font-weight="600" fill="#0F172A">"my meet link"</text>
+
+  <line x1="404" y1="82" x2="432" y2="82" stroke="#C3CBD9" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M430 75 L444 82 L430 89 Z" fill="#C3CBD9"/>
+
+  <!-- pill -->
+  <rect x="456" y="54" width="160" height="56" rx="28" fill="#4F46E5"/>
+  <circle cx="486" cy="82" r="5.5" fill="#F43F5E"/>
+  <g fill="#FFFFFF">
+    <rect x="502" y="76" width="3.5" height="12" rx="1.75"/>
+    <rect x="513" y="70" width="3.5" height="24" rx="1.75"/>
+    <rect x="524" y="64" width="3.5" height="36" rx="1.75"/>
+    <rect x="535" y="72" width="3.5" height="20" rx="1.75"/>
+    <rect x="546" y="68" width="3.5" height="28" rx="1.75"/>
+    <rect x="557" y="77" width="3.5" height="10" rx="1.75"/>
+    <rect x="568" y="80" width="3.5" height="4" rx="1.75"/>
+  </g>
+  <text x="536" y="136" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="700" letter-spacing="2" fill="#94A3B8">VOXDROP</text>
+
+  <line x1="632" y1="82" x2="660" y2="82" stroke="#C3CBD9" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M658 75 L672 82 L658 89 Z" fill="#C3CBD9"/>
+
+  <!-- pasted -->
+  <rect x="684" y="30" width="456" height="104" rx="18" fill="#FFFFFF" stroke="#E5E9F0" stroke-width="1.5"/>
+  <text x="710" y="60" font-family="Consolas, 'Courier New', monospace" font-size="10.5" font-weight="700" letter-spacing="2" fill="#94A3B8">PASTED AT YOUR CURSOR</text>
+  <rect x="710" y="76" width="404" height="38" rx="10" fill="#EEF2FF"/>
+  <text x="726" y="100" font-family="Consolas, 'Courier New', monospace" font-size="15" font-weight="600" fill="#4F46E5">https://meet.google.com/abc-defg-hij</text>
+</svg>

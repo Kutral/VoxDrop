@@ -1,0 +1,91 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, Helvetica, sans-serif">
+  <!-- arrows -->
+  <g stroke="#C3CBD9" stroke-width="2.5" stroke-linecap="round">
+    <line x1="284" y1="150" x2="312" y2="150"/>
+    <line x1="584" y1="150" x2="612" y2="150"/>
+    <line x1="884" y1="150" x2="912" y2="150"/>
+  </g>
+  <g fill="#C3CBD9">
+    <path d="M310 143 L324 150 L310 157 Z"/>
+    <path d="M610 143 L624 150 L610 157 Z"/>
+    <path d="M910 143 L924 150 L910 157 Z"/>
+  </g>
+
+  <!-- cards -->
+  <g fill="#FFFFFF" stroke="#E5E9F0" stroke-width="1.5">
+    <rect x="24" y="37" width="252" height="226" rx="20"/>
+    <rect x="324" y="37" width="252" height="226" rx="20"/>
+    <rect x="624" y="37" width="252" height="226" rx="20"/>
+    <rect x="924" y="37" width="252" height="226" rx="20"/>
+  </g>
+
+  <!-- step chips -->
+  <g>
+    <circle cx="150" cy="37" r="17" fill="#4F46E5"/>
+    <circle cx="450" cy="37" r="17" fill="#4F46E5"/>
+    <circle cx="750" cy="37" r="17" fill="#4F46E5"/>
+    <circle cx="1050" cy="37" r="17" fill="#4F46E5"/>
+  </g>
+  <g fill="#FFFFFF" font-family="Consolas, 'Courier New', monospace" font-size="14" font-weight="700" text-anchor="middle">
+    <text x="150" y="42">1</text>
+    <text x="450" y="42">2</text>
+    <text x="750" y="42">3</text>
+    <text x="1050" y="42">4</text>
+  </g>
+
+  <!-- card 1: HOLD -->
+  <g>
+    <rect x="55" y="92" width="86" height="38" rx="9" fill="#F8FAFC" stroke="#C9D2DE" stroke-width="1.5"/>
+    <rect x="159" y="92" width="86" height="38" rx="9" fill="#F8FAFC" stroke="#C9D2DE" stroke-width="1.5"/>
+    <rect x="55" y="127" width="86" height="3" rx="1.5" fill="#AAB6C6"/>
+    <rect x="159" y="127" width="86" height="3" rx="1.5" fill="#AAB6C6"/>
+    <text x="98" y="116" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="15" font-weight="600" fill="#1E293B">Ctrl</text>
+    <text x="202" y="116" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="15" font-weight="600" fill="#1E293B">Win</text>
+    <text x="150" y="182" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#0F172A">HOLD</text>
+    <text x="150" y="208" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">any app, any text field</text>
+  </g>
+
+  <!-- card 2: SPEAK -->
+  <g>
+    <rect x="355" y="90" width="190" height="44" rx="22" fill="#FFFFFF" stroke="#C9D2DE" stroke-width="1.5"/>
+    <circle cx="380" cy="112" r="5" fill="#F43F5E"/>
+    <g fill="#6366F1">
+      <rect x="396" y="106" width="3.5" height="12" rx="1.75"/>
+      <rect x="408" y="101" width="3.5" height="22" rx="1.75"/>
+      <rect x="420" y="95"  width="3.5" height="34" rx="1.75"/>
+      <rect x="432" y="88"  width="3.5" height="48" rx="1.75"/>
+      <rect x="444" y="98"  width="3.5" height="28" rx="1.75"/>
+      <rect x="456" y="92"  width="3.5" height="40" rx="1.75"/>
+      <rect x="468" y="103" width="3.5" height="18" rx="1.75"/>
+      <rect x="480" y="96"  width="3.5" height="32" rx="1.75"/>
+      <rect x="492" y="107" width="3.5" height="10" rx="1.75"/>
+      <rect x="504" y="110" width="3.5" height="4"  rx="1.75"/>
+    </g>
+    <text x="450" y="182" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#0F172A">SPEAK</text>
+    <text x="450" y="208" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">music pauses automatically</text>
+  </g>
+
+  <!-- card 3: RELEASE -->
+  <g>
+    <line x1="750" y1="116" x2="750" y2="82" stroke="#10B981" stroke-width="3" stroke-linecap="round"/>
+    <path d="M741 88 L750 76 L759 88 Z" fill="#10B981"/>
+    <rect x="705" y="124" width="90" height="38" rx="9" fill="#F8FAFC" stroke="#C9D2DE" stroke-width="1.5"/>
+    <rect x="705" y="159" width="90" height="3" rx="1.5" fill="#AAB6C6"/>
+    <text x="750" y="148" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="14" font-weight="600" fill="#64748B">keys</text>
+    <text x="750" y="182" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#0F172A">RELEASE</text>
+    <text x="750" y="208" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">recording stops instantly</text>
+  </g>
+
+  <!-- card 4: DONE -->
+  <g>
+    <rect x="980" y="74" width="140" height="88" rx="10" fill="#FFFFFF" stroke="#C9D2DE" stroke-width="1.5"/>
+    <rect x="998" y="92"  width="96" height="8" rx="4" fill="#E2E8F0"/>
+    <rect x="998" y="108" width="104" height="8" rx="4" fill="#E2E8F0"/>
+    <rect x="998" y="124" width="72" height="8" rx="4" fill="#4F46E5"/>
+    <rect x="1076" y="120" width="3" height="16" rx="1.5" fill="#4F46E5"/>
+    <circle cx="1122" cy="78" r="13" fill="#10B981"/>
+    <path d="M1116 78 L1120.5 82.5 L1129 74" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <text x="1050" y="182" text-anchor="middle" font-size="17" font-weight="800" letter-spacing="2" fill="#0F172A">DONE</text>
+    <text x="1050" y="208" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">polished text, pasted at cursor</text>
+  </g>
+</svg>

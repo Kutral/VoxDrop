@@ -1,0 +1,41 @@
+<svg width="1200" height="230" viewBox="0 0 1200 230" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, Helvetica, sans-serif">
+  <!-- column separators -->
+  <g stroke="#EDF0F4" stroke-width="1.5">
+    <line x1="300" y1="40" x2="300" y2="190"/>
+    <line x1="600" y1="40" x2="600" y2="190"/>
+    <line x1="900" y1="40" x2="900" y2="190"/>
+  </g>
+
+  <!-- 1: global hotkey (bolt) -->
+  <circle cx="150" cy="80" r="30" fill="#EEF2FF" stroke="#DDE3F0" stroke-width="1.5"/>
+  <path d="M154 62 L142 80 L150 80 L146 98 L160 78 L151 78 Z" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linejoin="round"/>
+  <text x="150" y="146" text-anchor="middle" font-size="15" font-weight="700" fill="#0F172A">GLOBAL HOTKEY</text>
+  <text x="150" y="170" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">works in every app, fully remappable</text>
+
+  <!-- 2: instant pill (waveform) -->
+  <circle cx="450" cy="80" r="30" fill="#EEF2FF" stroke="#DDE3F0" stroke-width="1.5"/>
+  <g stroke="#4F46E5" stroke-width="2.5" stroke-linecap="round">
+    <line x1="438" y1="76" x2="438" y2="84"/>
+    <line x1="444" y1="71" x2="444" y2="89"/>
+    <line x1="450" y1="66" x2="450" y2="94"/>
+    <line x1="456" y1="71" x2="456" y2="89"/>
+    <line x1="462" y1="76" x2="462" y2="84"/>
+  </g>
+  <text x="450" y="146" text-anchor="middle" font-size="15" font-weight="700" fill="#0F172A">INSTANT PILL</text>
+  <text x="450" y="170" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">live waveform, zero cold-start</text>
+
+  <!-- 3: AI polish (sparkles) -->
+  <circle cx="750" cy="80" r="30" fill="#EEF2FF" stroke="#DDE3F0" stroke-width="1.5"/>
+  <path d="M750 62 C751.8 71 754 73.2 763 75 C754 76.8 751.8 79 750 88 C748.2 79 746 76.8 737 75 C746 73.2 748.2 71 750 62 Z" fill="#4F46E5"/>
+  <path d="M765 64 C765.7 67 766.6 67.9 769.5 68.5 C766.6 69.1 765.7 70 765 73 C764.3 70 763.4 69.1 760.5 68.5 C763.4 67.9 764.3 67 765 64 Z" fill="#8B5CF6"/>
+  <path d="M736 84 C736.6 86.4 737.3 87.1 739.7 87.7 C737.3 88.3 736.6 89 736 91.4 C735.4 89 734.7 88.3 732.3 87.7 C734.7 87.1 735.4 86.4 736 84 Z" fill="#818CF8"/>
+  <text x="750" y="146" text-anchor="middle" font-size="15" font-weight="700" fill="#0F172A">AI POLISH</text>
+  <text x="750" y="170" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">Whisper + LLM cleanup via Groq</text>
+
+  <!-- 4: private by design (shield) -->
+  <circle cx="1050" cy="80" r="30" fill="#EEF2FF" stroke="#DDE3F0" stroke-width="1.5"/>
+  <path d="M1050 62 L1059.5 66.5 V75.5 C1059.5 82.5 1055.5 87 1050 89.5 C1044.5 87 1040.5 82.5 1040.5 75.5 V66.5 Z" fill="none" stroke="#4F46E5" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M1045.5 75.5 L1048.5 78.5 L1054.5 72.5" stroke="#4F46E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="1050" y="146" text-anchor="middle" font-size="15" font-weight="700" fill="#0F172A">PRIVATE BY DESIGN</text>
+  <text x="1050" y="170" text-anchor="middle" font-size="12.5" font-weight="500" fill="#64748B">local history, snippets and keys</text>
+</svg>
