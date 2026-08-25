@@ -28,9 +28,6 @@ import {
   ExternalLink,
   Search,
   Clock,
-  Flame,
-  Gauge,
-  Hourglass,
   Eye,
   EyeOff,
   Mic,
@@ -62,7 +59,14 @@ export function MainView() {
   const [installedVer, setInstalledVer] = useState<string>('0.0.12');
 
   const history = useAppStore(state => state.history);
-  const { apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider, snippets, hotkey, recomputeStats } = useAppStore();
+  const snippets = useAppStore(state => state.snippets);
+  const llamaProvider = useAppStore(state => state.llamaProvider);
+  const recomputeStats = useAppStore(state => state.recomputeStats);
+
+  // Primitive signature: re-renders the shell only when a synced setting changes
+  const settingsSignature = useAppStore(s =>
+    `${s.apiKey}|${s.cerebrasApiKey}|${s.whisperModel}|${s.llamaModel}|${s.llamaProvider}|${s.hotkey}|${s.snippets.length}`
+  );
 
   // Ensure stats are recomputed on mount
   useEffect(() => {
@@ -72,8 +76,11 @@ export function MainView() {
 
   // Track settings changes and broadcast to pill window so it can rehydrate
   useEffect(() => {
-    emit('settings-changed').catch(console.error);
-  }, [apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider, snippets, hotkey]);
+    const timer = setTimeout(() => {
+      emit('settings-changed').catch(console.error);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [settingsSignature]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,19 +152,19 @@ export function MainView() {
     return (
       <button
         onClick={() => setTab(id)}
-        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all duration-150 relative ${
+        className={`nav-item relative w-full flex items-center justify-between pl-4 pr-3 py-2.5 rounded-xl transition-all duration-150 ${
           active
-            ? 'bg-indigo-600 text-white font-semibold shadow-[0_2px_10px_rgba(79,70,229,0.3),inset_0_1px_0_rgba(255,255,255,0.25)]'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-medium'
+            ? 'nav-item-active bg-indigo-50/90 text-indigo-700 font-semibold'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/45 font-medium'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-slate-500'}`} strokeWidth={active ? 2.4 : 2} />
+          <Icon className={`w-4 h-4 ${active ? 'text-indigo-600' : 'text-slate-400'}`} strokeWidth={active ? 2.2 : 2} />
           <span className="text-[13.5px] tracking-tight">{label}</span>
         </div>
         {badgeCount !== undefined && badgeCount > 0 && (
           <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full ${
-            active ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
+            active ? 'bg-indigo-100/80 text-indigo-700' : 'bg-slate-200/70 text-slate-500'
           }`}>
             {badgeCount}
           </span>
@@ -170,25 +177,25 @@ export function MainView() {
     <div className="w-screen h-screen studio-app text-slate-900 flex font-sans overflow-hidden relative">
       {/* Studio Ambient Subtle Lighting */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[60%] rounded-full bg-indigo-200/30 blur-[130px]" />
-        <div className="absolute top-[40%] -right-[15%] w-[45%] h-[50%] rounded-full bg-blue-100/40 blur-[140px]" />
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[60%] rounded-full bg-indigo-200/25 blur-[130px]" />
+        <div className="absolute top-[40%] -right-[15%] w-[45%] h-[50%] rounded-full bg-blue-100/30 blur-[140px]" />
       </div>
 
-      {/* Sidebar */}
-      <aside className="w-[230px] h-full flex flex-col studio-sidebar p-4 flex-shrink-0 z-20">
+      {/* Sidebar — floating dock */}
+      <aside className="w-[246px] h-[calc(100vh-24px)] my-3 ml-3 flex flex-col bg-white/85 border border-slate-200/70 rounded-[20px] shadow-[0_12px_40px_-20px_rgba(15,23,42,0.18)] backdrop-blur-xl p-3 flex-shrink-0 z-20">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2 py-3 mb-6">
-          <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm border border-slate-200/80 bg-white p-1">
+        <div className="flex items-center gap-2.5 px-2 py-3 mb-5">
+          <div className="w-8 h-8 rounded-[10px] overflow-hidden flex items-center justify-center shadow-sm border border-slate-200/70 bg-white p-1">
             <img src="/app-icon.png" alt="VoxDrop Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-[15px] font-extrabold tracking-tight text-slate-900 leading-none">VoxDrop</span>
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200/70">
                 v{installedVer}
               </span>
             </div>
-            <span className="text-[10.5px] font-medium text-slate-600 tracking-wider uppercase block mt-0.5">
+            <span className="text-[10.5px] font-medium text-slate-500 tracking-wider uppercase block mt-0.5">
               Acoustic Dictation
             </span>
           </div>
@@ -204,25 +211,28 @@ export function MainView() {
         <div className="flex-1" />
 
         {/* Engine Status Tag */}
-        <div className="p-3 mb-3 rounded-xl bg-slate-100/80 border border-slate-200/60 text-[11px] text-slate-600">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-700 mb-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="mx-1 mb-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 mb-1">
+            <span className="relative flex w-2 h-2">
+              <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+              <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+            </span>
             <span>Active Engine</span>
           </div>
-          <p className="font-mono text-[10px] text-slate-500 truncate">
+          <p className="font-mono text-[10px] text-slate-500 truncate pl-4">
             {llamaProvider === 'cerebras' ? 'Cerebras Wafer' : 'Groq LPU'} • Whisper
           </p>
         </div>
 
         {/* Settings button */}
-        <div className="flex flex-col gap-1 w-full pt-2 border-t border-slate-200/60">
+        <div className="flex flex-col gap-1 w-full pt-2 border-t border-slate-100">
           {navItem('settings', Settings, 'Preferences')}
         </div>
       </aside>
 
       {/* Main Content Pane */}
       <main className="flex-1 h-full relative z-10 overflow-hidden flex flex-col">
-        <div className="content-scroll flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10 relative">
+        <div className="content-scroll flex-1 overflow-y-auto px-5 sm:px-7 lg:px-9 py-5 relative">
           <div className="max-w-5xl mx-auto w-full relative z-10">
             {tab === 'dashboard' && <DashboardTab onNavigate={(target) => setTab(target)} />}
             {tab === 'history' && <HistoryTab />}
@@ -340,10 +350,10 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
       : '3.8x';
 
     let speedTier = 'Conversational';
-    if (wpm >= 170) speedTier = '⚡ Turbo Velocity';
-    else if (wpm >= 130) speedTier = '🔥 High Speed';
-    else if (wpm >= 90) speedTier = '✨ Conversational';
-    else if (wpm > 0) speedTier = '🎯 Steady';
+    if (wpm >= 170) speedTier = 'Turbo Velocity';
+    else if (wpm >= 130) speedTier = 'High Speed';
+    else if (wpm >= 90) speedTier = 'Conversational';
+    else if (wpm > 0) speedTier = 'Steady';
 
     const avgPerSession = history.length > 0 ? Math.round(allWords / history.length) : 0;
     const pages = Math.max(1, Math.round(allWords / 250));
@@ -431,6 +441,44 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
     return [...history].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 4);
   }, [history]);
 
+  // Signature sparkline: last 14 days of dictation volume as a smooth area chart
+  const sparkline = useMemo(() => {
+    const now = new Date();
+    const dailyWords: number[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const dateStr = day.toDateString();
+      let words = 0;
+      for (const item of history) {
+        if (item.created_at && new Date(item.created_at).toDateString() === dateStr) {
+          words += item.transcript.trim().split(/\s+/).filter(Boolean).length;
+        }
+      }
+      dailyWords.push(words);
+    }
+
+    const w = 600;
+    const h = 56;
+    const max = Math.max(...dailyWords, 1);
+    const stepX = w / (dailyWords.length - 1);
+    const pts = dailyWords.map((v, i) => ({
+      x: i * stepX,
+      y: h - 6 - (v / max) * (h - 18),
+    }));
+
+    let line = `M ${pts[0].x},${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1];
+      const p1 = pts[i];
+      const mx = (p0.x + p1.x) / 2;
+      line += ` Q ${mx},${p0.y} ${mx},${(p0.y + p1.y) / 2} Q ${mx},${p1.y} ${p1.x},${p1.y}`;
+    }
+    const area = `${line} L ${w},${h} L 0,${h} Z`;
+    const last = pts[pts.length - 1];
+
+    return { line, area, lastX: last.x, lastY: last.y, hasData: dailyWords.some(v => v > 0) };
+  }, [history]);
+
   const handleCopy = (item: any) => {
     navigator.clipboard.writeText(item.transcript);
     setCopiedId(item.id);
@@ -441,271 +489,259 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
 
   return (
     <div className="pb-12 space-y-7 animate-fade-in">
-      {/* Hero Header & Live Telemetry Strip */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-3 border-b border-slate-200/80">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1.5 shadow-2xs">
-              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+      {/* Aurora hero */}
+      <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-500 px-7 pt-7 pb-6 shadow-[0_20px_50px_-24px_rgba(79,70,229,0.55)]">
+        {/* Soft light blooms */}
+        <div className="absolute -top-24 -right-16 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-28 -left-12 w-80 h-80 rounded-full bg-sky-400/20 blur-3xl pointer-events-none" />
+
+        <div className="relative">
+          <div className="flex items-center gap-3">
+            <span className="text-[10.5px] font-mono font-bold uppercase tracking-[0.14em] text-indigo-100/80 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5" />
               Acoustic Intelligence Hub
             </span>
             {apiKey && (
-              <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/80 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Engine Active
+              <span className="text-[10.5px] font-mono font-semibold text-white bg-white/15 px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                Live
               </span>
             )}
           </div>
-          <h1 className="text-[32px] sm:text-[34px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
-            {greeting}, ready to dictate
-          </h1>
-          <p className="text-slate-600 text-[14.5px] mt-1 font-medium max-w-xl">
-            High-velocity speech capture, auto-formatted and instantly pasted into your active app.
-          </p>
-        </div>
 
-        {/* Hotkey Badge Pill */}
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white/90 border border-slate-200/80 shadow-xs self-start lg:self-auto backdrop-blur-md">
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-            <Mic className="w-4 h-4" />
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mt-3.5">
+            <div>
+              <h1 className="text-[32px] font-extrabold tracking-[-0.03em] text-white leading-[1.08]">
+                {greeting}, ready to dictate
+              </h1>
+              <p className="text-indigo-100/85 text-[14.5px] mt-2 font-medium max-w-xl leading-relaxed">
+                High-velocity speech capture, auto-formatted and instantly pasted into your active app.
+              </p>
+            </div>
+
+            {/* Global trigger switch */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/10 ring-1 ring-white/20 self-start lg:self-auto backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-[10px] bg-white/15 flex items-center justify-center text-white">
+                <Mic className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9.5px] font-mono font-bold uppercase tracking-[0.14em] text-indigo-100/80">Global Trigger</span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[12px] font-semibold text-indigo-100">Hold</span>
+                  {keyParts.map((k, i) => (
+                    <span key={i} className="keycap text-[12px]">{k}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">Global Trigger</span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-[12px] font-semibold text-slate-600 mr-0.5">Hold</span>
-              {keyParts.map((k, i) => (
-                <span key={i} className="keycap text-[12px]">{k}</span>
-              ))}
+
+          {/* Signature: your last 14 days as a voiceprint */}
+          <div className="mt-7" aria-hidden="true">
+            <svg viewBox="0 0 600 56" preserveAspectRatio="none" className="w-full h-14 block">
+              <defs>
+                <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30" />
+                  <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path d={sparkline.area} fill="url(#sparkFill)" />
+              <path
+                d={sparkline.line}
+                fill="none"
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                pathLength={1}
+                className="sparkline-line"
+              />
+              <circle cx={sparkline.lastX} cy={sparkline.lastY} r="8" fill="rgba(255,255,255,0.25)" />
+              <circle cx={sparkline.lastX} cy={sparkline.lastY} r="3.5" fill="#FFFFFF" />
+            </svg>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-indigo-100/60">14 days ago</span>
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-indigo-100/80">
+                {sparkline.hasData ? 'Today' : 'Start dictating to shape your waveform'}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 4 High-Accuracy Stat Telemetry Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Speaking Velocity */}
-        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-indigo-300">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Gauge className="w-4 h-4 text-indigo-600" /> Speaking Speed
+      {/* Stats — editorial spec strip: one panel, hairline dividers */}
+      <div className="studio-card rounded-[20px] grid grid-cols-2 lg:grid-cols-4 overflow-hidden animate-fade-in">
+        {/* Speaking speed */}
+        <div className="p-5 lg:p-6">
+          <span className="studio-eyebrow">Speaking speed</span>
+          <div className="flex items-baseline gap-1.5 mt-3">
+            <span className="text-[34px] font-extrabold text-slate-900 tracking-[-0.03em] leading-none">
+              {stats.averageWpm > 0 ? stats.averageWpm : '—'}
             </span>
-            {stats.averageWpm > 0 && (
-              <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                {stats.speedTier}
-              </span>
-            )}
+            <span className="text-[13px] font-semibold text-slate-400">wpm</span>
           </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
-                {stats.averageWpm > 0 ? stats.averageWpm : '—'}
-              </span>
-              <span className="text-[14px] font-bold text-slate-500">WPM</span>
-            </div>
-
-            {/* Velocity Bar Indicator */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(10, (stats.averageWpm / 200) * 100))}%` }}
-              />
-            </div>
-
-            <p className="text-[12px] text-slate-600 font-medium mt-2">
-              {stats.averageWpm > 0 
-                ? <><strong className="text-slate-800 font-bold">{stats.speedMultiplier}</strong> faster than typing (~40 WPM)</>
-                : 'Start dictating to calculate speed'}
-            </p>
+          <div className="mt-4 h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(6, (stats.averageWpm / 200) * 100))}%` }}
+            />
           </div>
+          <p className="mt-3 text-[12.5px] text-slate-500 font-medium leading-snug">
+            {stats.averageWpm > 0
+              ? <><span className="text-slate-700 font-semibold">{stats.speedTier}</span> — {stats.speedMultiplier} faster than typing</>
+              : 'Hold the hotkey to take your first measurement'}
+          </p>
         </div>
 
-        {/* Card 2: Time Saved */}
-        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-blue-300">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Hourglass className="w-4 h-4 text-blue-600" /> Time Saved
+        {/* Time saved */}
+        <div className="p-5 lg:p-6 border-l border-t lg:border-t-0 border-slate-100">
+          <span className="studio-eyebrow">Time saved</span>
+          <div className="flex items-baseline gap-1.5 mt-3">
+            <span className="text-[34px] font-extrabold text-slate-900 tracking-[-0.03em] leading-none">
+              {stats.timeSavedMinutes >= 60 ? (stats.timeSavedMinutes / 60).toFixed(1) : stats.timeSavedMinutes}
             </span>
-            <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-              ~75% Savings
-            </span>
+            <span className="text-[13px] font-semibold text-slate-400">{stats.timeSavedMinutes >= 60 ? 'hrs' : 'mins'}</span>
           </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
-                {stats.timeSavedFormatted}
-              </span>
-              <span className="text-[14px] font-bold text-slate-500">saved</span>
-            </div>
-
-            {/* Efficiency Progress Line */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: '75%' }}
-              />
-            </div>
-
-            <p className="text-[12px] text-slate-600 font-medium mt-2">
-              Saved vs standard keyboard typing
-            </p>
+          <div className="mt-4 h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500" style={{ width: '75%' }} />
           </div>
+          <p className="mt-3 text-[12.5px] text-slate-500 font-medium leading-snug">
+            ~75% less effort than keyboard typing
+          </p>
         </div>
 
-        {/* Card 3: Total Words Captured */}
-        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-amber-300">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Flame className="w-4 h-4 text-amber-500" /> Words Captured
+        {/* Words captured */}
+        <div className="p-5 lg:p-6 border-t lg:border-t-0 lg:border-l border-slate-100">
+          <span className="studio-eyebrow">Words captured</span>
+          <div className="flex items-baseline gap-1.5 mt-3">
+            <span className="text-[34px] font-extrabold text-slate-900 tracking-[-0.03em] leading-none">
+              {stats.totalWords.toLocaleString()}
             </span>
-            {stats.wordsToday > 0 && (
-              <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                +{stats.wordsToday} today
-              </span>
-            )}
           </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
-                {stats.totalWords.toLocaleString()}
-              </span>
-              <span className="text-[14px] font-bold text-slate-500">words</span>
-            </div>
-
-            {/* Volume Line */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(15, (stats.totalWords / 2000) * 100))}%` }}
-              />
-            </div>
-
-            <p className="text-[12px] text-slate-600 font-medium mt-2">
-              {stats.totalWords > 0 
-                ? `Equivalent to ~${stats.pagesCount} standard written pages` 
-                : 'Your voice stream is ready'}
-            </p>
+          <div className="mt-4 h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(6, (stats.totalWords / 2000) * 100))}%` }}
+            />
           </div>
+          <p className="mt-3 text-[12.5px] text-slate-500 font-medium leading-snug">
+            {stats.totalWords > 0
+              ? <>+{stats.wordsToday} today · ~{stats.pagesCount} written page{stats.pagesCount > 1 ? 's' : ''}</>
+              : 'Every word you dictate lands here'}
+          </p>
         </div>
 
-        {/* Card 4: Active Streak */}
-        <div className="studio-card p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group hover:border-purple-300">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[12px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-purple-600" /> Weekly Streak
+        {/* Weekly streak */}
+        <div className="p-5 lg:p-6 border-l border-t lg:border-t-0 border-slate-100">
+          <span className="studio-eyebrow">Weekly streak</span>
+          <div className="flex items-baseline gap-1.5 mt-3">
+            <span className="text-[34px] font-extrabold text-slate-900 tracking-[-0.03em] leading-none">
+              {weeklyStreak}
             </span>
-            <span className="telemetry-badge text-[10.5px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-              {history.length} captures
-            </span>
+            <span className="text-[13px] font-semibold text-slate-400">{weeklyStreak === 1 ? 'week' : 'weeks'}</span>
           </div>
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[34px] font-extrabold font-mono text-slate-900 tracking-tight leading-none">
-                {weeklyStreak}
-              </span>
-              <span className="text-[14px] font-bold text-slate-500">
-                {weeklyStreak === 1 ? 'week' : 'weeks'}
-              </span>
-            </div>
-
-            {/* Streak Progress Line */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(20, weeklyStreak * 25))}%` }}
-              />
-            </div>
-
-            <p className="text-[12px] text-slate-600 font-medium mt-2">
-              {weeklyStreak > 0 
-                ? `${weeklyStreak}${getOrdinalSuffix(weeklyStreak)} active week in a row!` 
-                : 'Dictate this week to build streak'}
-            </p>
+          <div className="mt-4 h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-violet-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(6, weeklyStreak * 25))}%` }}
+            />
           </div>
+          <p className="mt-3 text-[12.5px] text-slate-500 font-medium leading-snug">
+            {weeklyStreak > 0
+              ? <>{history.length} captures · {weeklyStreak}{getOrdinalSuffix(weeklyStreak)} week in a row</>
+              : 'Dictate this week to start a streak'}
+          </p>
         </div>
       </div>
 
       {/* 7-Day Activity Rhythm Bar */}
-      <div className="studio-card p-5 rounded-2xl space-y-3">
+      <div className="studio-card p-5 rounded-[20px] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-indigo-600" />
+            <Calendar className="w-4 h-4 text-indigo-500" />
             <h3 className="text-[15.5px] font-bold text-slate-900 tracking-tight">Weekly Dictation Rhythm</h3>
           </div>
-          <span className="text-[12px] font-medium text-slate-500">
-            {stats.todayCount > 0 
-              ? `${stats.todayCount} capture${stats.todayCount > 1 ? 's' : ''} recorded today (${stats.wordsToday} words)` 
+          <span className="telemetry-badge text-[11px] text-slate-500">
+            {stats.todayCount > 0
+              ? `${stats.todayCount} capture${stats.todayCount > 1 ? 's' : ''} today · ${stats.wordsToday} words`
               : 'No captures yet today'}
           </span>
         </div>
 
-        {/* 7-Day Grid */}
+        {/* 7-Day waveform grid — bar height encodes words captured */}
         <div className="grid grid-cols-7 gap-2 pt-1">
-          {weekDays.map((day, idx) => {
-            return (
-              <div
-                key={idx}
-                className={`p-3 rounded-xl flex flex-col items-center justify-center transition-all ${
-                  day.isToday
-                    ? 'bg-indigo-50/80 border-2 border-indigo-600 shadow-xs'
-                    : day.hasActivity
-                    ? 'bg-slate-50 border border-slate-200/90'
-                    : 'bg-slate-50/40 border border-slate-200/50 opacity-60'
-                }`}
-              >
-                <span className={`text-[11.5px] font-bold uppercase tracking-wider ${
-                  day.isToday ? 'text-indigo-700' : 'text-slate-500'
-                }`}>
-                  {day.dayLabel}
-                </span>
-
-                <span className={`text-[16px] font-extrabold font-mono mt-0.5 ${
-                  day.isToday ? 'text-indigo-900' : day.hasActivity ? 'text-slate-800' : 'text-slate-400'
-                }`}>
-                  {day.dateNumber}
-                </span>
-
-                <div className="mt-1 flex items-center gap-1">
-                  {day.hasActivity ? (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" title={`${day.wordsOnDay} words captured`} />
-                  ) : day.isPastOrToday ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                  ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
-                  )}
-                </div>
-
-                {day.hasActivity && (
-                  <span className="text-[10px] font-mono font-semibold text-emerald-700 mt-1">
-                    {day.wordsOnDay}w
+          {(() => {
+            const maxDayWords = Math.max(...weekDays.map(d => d.wordsOnDay), 1);
+            return weekDays.map((day, idx) => {
+              const rel = day.wordsOnDay > 0 ? day.wordsOnDay / maxDayWords : 0;
+              const barHeight = day.hasActivity ? Math.max(10, Math.round(8 + rel * 26)) : 5;
+              return (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-2xl flex flex-col items-center justify-center transition-all duration-150 ${
+                    day.isToday
+                      ? 'bg-indigo-50/80 ring-1 ring-indigo-200'
+                      : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`text-[10.5px] font-mono font-bold uppercase tracking-wider ${
+                    day.isToday ? 'text-indigo-600' : 'text-slate-400'
+                  }`}>
+                    {day.dayLabel}
                   </span>
-                )}
-              </div>
-            );
-          })}
+
+                  <span className={`text-[16px] font-extrabold tracking-tight mt-0.5 leading-none ${
+                    day.isToday ? 'text-indigo-900' : day.hasActivity ? 'text-slate-800' : 'text-slate-300'
+                  }`}>
+                    {day.dateNumber}
+                  </span>
+
+                  {/* Volume waveform bar */}
+                  <div className="h-9 flex items-end mt-2.5" title={day.hasActivity ? `${day.wordsOnDay} words captured` : undefined}>
+                    <div
+                      className={`w-7 rounded-full transition-all duration-500 ${
+                        day.isToday
+                          ? 'bg-gradient-to-t from-indigo-600 to-indigo-400'
+                          : day.hasActivity
+                          ? 'bg-gradient-to-t from-slate-300 to-slate-200'
+                          : 'bg-slate-200/60'
+                      }`}
+                      style={{ height: `${barHeight}px` }}
+                    />
+                  </div>
+
+                  <span className={`text-[10px] font-mono font-semibold mt-1.5 h-4 ${
+                    day.hasActivity ? (day.isToday ? 'text-indigo-600' : 'text-slate-400') : 'text-transparent'
+                  }`}>
+                    {day.hasActivity ? `${day.wordsOnDay}w` : '·'}
+                  </span>
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
 
       {/* Recent Transcripts Feed & Quick Actions Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Recent Stream */}
-        <div className="lg:col-span-2 studio-card p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+        <div className="lg:col-span-2 studio-card p-6 rounded-[20px] space-y-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-600" />
+                <Clock className="w-4 h-4 text-indigo-500" />
                 <h2 className="text-[16px] font-bold text-slate-900 tracking-tight">Recent Activity Stream</h2>
               </div>
               <button
                 onClick={() => onNavigate('history')}
-                className="text-[13px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+                className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group"
               >
-                View Full Audit Log ({history.length}) <ArrowRight className="w-3.5 h-3.5" />
+                View all ({history.length}) <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
 
             {recentItems.length === 0 ? (
-              <div className="py-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 mt-4">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-2 text-indigo-600">
+              <div className="py-12 text-center bg-slate-50/70 rounded-2xl mt-4">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center mx-auto mb-2 text-indigo-500 shadow-sm">
                   <Mic className="w-5 h-5" />
                 </div>
                 <p className="text-slate-800 font-bold text-[14px]">No dictations recorded yet</p>
@@ -714,44 +750,44 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 mt-4">
+              <div className="space-y-2.5 mt-4">
                 {recentItems.map(item => {
                   const words = item.transcript.trim().split(/\s+/).filter(w => w.length > 0).length;
                   const durationSec = Number(item.duration_seconds) || 0;
                   const sessionWpm = durationSec > 0.5 && words > 1 ? Math.round(words / (durationSec / 60)) : 0;
 
                   return (
-                    <div 
+                    <div
                       key={item.id}
-                      className="p-4 rounded-xl bg-white border border-slate-200/80 hover:border-indigo-300 hover:shadow-xs transition-all flex items-start justify-between gap-4 group"
+                      className="p-4 rounded-2xl bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-[0_10px_28px_-16px_rgba(15,23,42,0.18)] transition-all duration-150 flex items-start justify-between gap-4 group"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="telemetry-badge text-[10.5px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                          <span className="telemetry-badge text-[10.5px] text-slate-500">
                             {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
-                          <span className="telemetry-badge text-[10.5px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          <span className="text-[10.5px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
                             {words} words
                           </span>
                           {durationSec > 0 && (
-                            <span className="telemetry-badge text-[10.5px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
-                              ⏱ {durationSec.toFixed(1)}s
+                            <span className="telemetry-badge text-[10.5px] text-slate-400">
+                              {durationSec.toFixed(1)}s
                             </span>
                           )}
                           {sessionWpm > 0 && (
-                            <span className="telemetry-badge text-[10.5px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              ⚡ {sessionWpm} WPM
+                            <span className="text-[10.5px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              {sessionWpm} WPM
                             </span>
                           )}
                         </div>
-                        <p className="text-[14px] text-slate-800 font-medium line-clamp-2 leading-relaxed select-text">
+                        <p className="text-[14px] text-slate-700 font-medium line-clamp-2 leading-relaxed select-text">
                           {item.transcript}
                         </p>
                       </div>
 
                       <button
                         onClick={() => handleCopy(item)}
-                        className="shrink-0 studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1 mt-0.5"
+                        className="shrink-0 studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1 mt-0.5"
                         title="Copy transcript"
                       >
                         {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -768,30 +804,30 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
         {/* Right 1 Col: Quick Control Surfaces */}
         <div className="space-y-4">
           {/* Quick Audio Telemetry Card */}
-          <div className="studio-card p-5 rounded-2xl space-y-3">
-            <div className="flex items-center gap-2 text-slate-900 font-bold text-[14.5px]">
-              <TrendingUp className="w-4 h-4 text-indigo-600" />
+          <div className="studio-card p-5 rounded-[20px] space-y-3">
+            <div className="flex items-center gap-2 text-slate-900 font-bold text-[14.5px] tracking-tight">
+              <TrendingUp className="w-4 h-4 text-indigo-500" />
               <span>Acoustic Telemetry</span>
             </div>
 
             <div className="space-y-2.5 pt-1 text-[13px]">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-                <span className="text-slate-600 font-medium">Audio Captured:</span>
-                <span className="font-mono font-bold text-slate-900">{stats.totalSpokenFormatted}</span>
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Audio captured</span>
+                <span className="telemetry-badge text-slate-900">{stats.totalSpokenFormatted}</span>
               </div>
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-                <span className="text-slate-600 font-medium">Avg Words/Capture:</span>
-                <span className="font-mono font-bold text-slate-900">{stats.averageWordsPerSession} words</span>
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Avg words / capture</span>
+                <span className="telemetry-badge text-slate-900">{stats.averageWordsPerSession}</span>
               </div>
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-                <span className="text-slate-600 font-medium">Peak Speed:</span>
-                <span className="font-mono font-bold text-emerald-700">
+              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <span className="text-slate-500 font-medium">Peak speed</span>
+                <span className="telemetry-badge text-emerald-700">
                   {stats.peakWpm > 0 ? `${stats.peakWpm} WPM` : '—'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-600 font-medium">Active Provider:</span>
-                <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                <span className="text-slate-500 font-medium">Active provider</span>
+                <span className="text-[10.5px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
                   {llamaProvider === 'cerebras' ? 'Cerebras' : 'Groq LPU'}
                 </span>
               </div>
@@ -799,17 +835,17 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
           </div>
 
           {/* Quick Voice Snippets CTA */}
-          <div className="studio-card p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/40 border border-indigo-100 space-y-3">
-            <div className="flex items-center gap-2 text-indigo-950 font-bold text-[14.5px]">
-              <Command className="w-4 h-4 text-indigo-600" />
+          <div className="studio-card p-5 rounded-[20px] space-y-3 bg-gradient-to-br from-indigo-50/70 to-violet-50/50">
+            <div className="flex items-center gap-2 text-indigo-950 font-bold text-[14.5px] tracking-tight">
+              <Command className="w-4 h-4 text-indigo-500" />
               <span>Voice Snippets</span>
             </div>
-            <p className="text-[12.5px] text-slate-600 font-medium">
+            <p className="text-[12.5px] text-slate-600 font-medium leading-relaxed">
               Create instant spoken triggers to expand links, templates, and code blocks.
             </p>
             <button
               onClick={() => onNavigate('snippets')}
-              className="w-full studio-btn px-3 py-2 rounded-xl text-[12.5px] font-bold text-indigo-700 hover:bg-white flex items-center justify-center gap-1.5 shadow-2xs"
+              className="w-full studio-btn px-3 py-2 rounded-xl text-[12.5px] font-bold text-indigo-700 bg-white/80 flex items-center justify-center gap-1.5"
             >
               <span>Manage Voice Snippets</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -819,20 +855,20 @@ function DashboardTab({ onNavigate }: { onNavigate: (target: 'history' | 'snippe
           {/* Preferences CTA */}
           <button
             onClick={() => onNavigate('settings')}
-            className="w-full studio-btn p-4 rounded-2xl text-left hover:border-indigo-300 flex items-center justify-between group transition-all"
+            className="w-full studio-card-interactive p-4 rounded-[20px] text-left flex items-center justify-between group"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
                 <Sliders className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[13.5px] font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                <p className="text-[13.5px] font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">
                   Studio Preferences
                 </p>
-                <span className="text-[11.5px] text-slate-500 font-medium">Configure models, hotkeys, & API keys</span>
+                <span className="text-[11.5px] text-slate-400 font-medium">Models, hotkeys, & API keys</span>
               </div>
             </div>
-            <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
           </button>
         </div>
       </div>
@@ -876,15 +912,13 @@ function HistoryTab() {
   return (
     <div className="pb-10 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2">
         <div>
-          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-            Audit Trail
-          </span>
-          <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+          <span className="studio-eyebrow">Audit Trail</span>
+          <h1 className="text-[32px] font-extrabold tracking-[-0.03em] text-slate-900 mt-2 leading-[1.08]">
             Activity Log
           </h1>
-          <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+          <p className="text-slate-500 text-[14.5px] mt-1.5 font-medium">
             Every audio capture refined and safely preserved locally on your device.
           </p>
         </div>
@@ -895,7 +929,7 @@ function HistoryTab() {
             className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-all flex items-center gap-1.5 ${
               confirmClear
                 ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-300'
-                : 'studio-btn text-slate-600 hover:text-rose-600 hover:border-rose-200'
+                : 'studio-btn text-slate-500 hover:text-rose-600 hover:border-rose-200'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -930,18 +964,18 @@ function HistoryTab() {
       {/* Stream Cards */}
       <div className="space-y-3">
         {history.length === 0 ? (
-          <div className="py-20 text-center studio-card rounded-2xl border-dashed">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 text-indigo-600">
+          <div className="py-20 text-center studio-card rounded-[20px] border-dashed">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3 text-indigo-500">
               <Sparkles className="w-6 h-6" />
             </div>
             <h3 className="text-[17px] font-bold text-slate-900">No transcripts yet</h3>
-            <p className="text-[14px] text-slate-600 mt-1 max-w-sm mx-auto font-medium">
+            <p className="text-[14px] text-slate-500 mt-1 max-w-sm mx-auto font-medium">
               Hold down your dictation shortcut in any app to record and see your words captured here.
             </p>
           </div>
         ) : sortedFilteredHistory.length === 0 ? (
-          <div className="py-12 text-center studio-card rounded-2xl">
-            <p className="text-slate-600 font-semibold">No results matching "{searchQuery}"</p>
+          <div className="py-12 text-center studio-card rounded-[20px]">
+            <p className="text-slate-500 font-semibold">No results matching "{searchQuery}"</p>
           </div>
         ) : (
           sortedFilteredHistory.map(item => {
@@ -950,26 +984,26 @@ function HistoryTab() {
             const sessionWpm = durationSec > 0.5 && words > 1 ? Math.round(words / (durationSec / 60)) : 0;
 
             return (
-              <div 
+              <div
                 key={item.id}
-                className="studio-card p-5 rounded-2xl group relative overflow-hidden transition-all hover:border-slate-300"
+                className="studio-card-interactive p-5 rounded-[20px] group relative"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="telemetry-badge text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
-                      {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="telemetry-badge text-[11px] text-slate-500">
+                      {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                    <span className="text-[10.5px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
                       {words} words
                     </span>
                     {durationSec > 0 && (
-                      <span className="telemetry-badge text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
-                        ⏱ {durationSec.toFixed(1)}s
+                      <span className="telemetry-badge text-[11px] text-slate-400">
+                        {durationSec.toFixed(1)}s
                       </span>
                     )}
                     {sessionWpm > 0 && (
-                      <span className="telemetry-badge text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        ⚡ {sessionWpm} WPM
+                      <span className="text-[10.5px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        {sessionWpm} WPM
                       </span>
                     )}
                   </div>
@@ -977,14 +1011,14 @@ function HistoryTab() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleCopy(item)}
-                      className="studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
+                      className="studio-btn px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1"
                     >
                       {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedId === item.id ? 'Copied' : 'Copy'}</span>
                     </button>
                     <button
                       onClick={() => removeHistoryItem(item.id)}
-                      className="studio-btn px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-rose-600 hover:border-rose-200 flex items-center"
+                      className="studio-btn px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-rose-600 hover:border-rose-200 flex items-center"
                       title="Delete entry"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -992,7 +1026,7 @@ function HistoryTab() {
                   </div>
                 </div>
 
-                <p className="text-[15px] text-slate-800 leading-relaxed font-medium select-text">
+                <p className="text-[15px] text-slate-700 leading-relaxed font-medium select-text">
                   {item.transcript}
                 </p>
               </div>
@@ -1069,15 +1103,13 @@ function SnippetsTab() {
   return (
     <div className="pb-10 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2">
         <div>
-          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-            Acoustic Expansion
-          </span>
-          <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+          <span className="studio-eyebrow">Acoustic Expansion</span>
+          <h1 className="text-[32px] font-extrabold tracking-[-0.03em] text-slate-900 mt-2 leading-[1.08]">
             Voice Snippets
           </h1>
-          <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+          <p className="text-slate-500 text-[14.5px] mt-1.5 font-medium">
             Spoken triggers automatically expand into templates, URLs, and code snippets.
           </p>
         </div>
@@ -1089,7 +1121,7 @@ function SnippetsTab() {
           }}
           className={`px-4 py-2.5 rounded-xl text-[13.5px] font-bold transition-all flex items-center gap-1.5 ${
             showForm
-              ? 'studio-btn text-slate-700'
+              ? 'studio-btn text-slate-600'
               : 'studio-btn-primary'
           }`}
         >
@@ -1099,17 +1131,17 @@ function SnippetsTab() {
 
       {/* Snippet Form Drawer */}
       {showForm && (
-        <div className="studio-card p-6 rounded-2xl space-y-5 border-indigo-200 bg-indigo-50/20 shadow-md">
+        <div className="studio-card p-6 rounded-[20px] space-y-5 ring-1 ring-indigo-100">
           <div className="flex items-center justify-between">
-            <h3 className="text-[16px] font-bold text-slate-900">
+            <h3 className="text-[16px] font-bold text-slate-900 tracking-tight">
               {editingId ? 'Edit Spoken Snippet' : 'Configure New Snippet'}
             </h3>
-            <span className="text-[11px] font-mono text-slate-500">Case-insensitive trigger matching</span>
+            <span className="text-[11px] font-mono text-slate-400">Case-insensitive trigger matching</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[12.5px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              <label className="studio-eyebrow !text-[10px] block mb-2">
                 Spoken Trigger Phrase
               </label>
               <div className="relative">
@@ -1122,11 +1154,11 @@ function SnippetsTab() {
                   className="studio-input w-full !pl-10 font-medium"
                 />
               </div>
-              <p className="text-[11.5px] text-slate-500 mt-1">What you say during dictation.</p>
+              <p className="text-[11.5px] text-slate-400 mt-1.5 font-medium">What you say during dictation.</p>
             </div>
 
             <div>
-              <label className="block text-[12.5px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              <label className="studio-eyebrow !text-[10px] block mb-2">
                 Expansion Output
               </label>
               <textarea
@@ -1136,21 +1168,21 @@ function SnippetsTab() {
                 rows={2}
                 className="studio-input w-full resize-none font-medium text-[13.5px]"
               />
-              <p className="text-[11.5px] text-slate-500 mt-1">What gets pasted into the active application.</p>
+              <p className="text-[11.5px] text-slate-400 mt-1.5 font-medium">What gets pasted into the active application.</p>
             </div>
           </div>
 
           {/* Interactive Preview */}
           {trigger.trim() && expansion.trim() && (
-            <div className="p-3 rounded-xl bg-white border border-slate-200 text-[12.5px] flex items-center gap-2">
-              <span className="font-semibold text-slate-500">Preview:</span>
-              <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">"{trigger.trim()}"</span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-mono text-slate-800 bg-slate-100 px-2 py-0.5 rounded truncate max-w-md">{expansion.trim()}</span>
+            <div className="p-3 rounded-xl bg-slate-50 text-[12.5px] flex items-center gap-2">
+              <span className="font-semibold text-slate-400">Preview</span>
+              <span className="font-mono font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-100">"{trigger.trim()}"</span>
+              <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+              <span className="font-mono text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200 truncate max-w-md">{expansion.trim()}</span>
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/80">
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               onClick={handleCancel}
               className="studio-btn px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-600"
@@ -1194,45 +1226,45 @@ function SnippetsTab() {
       {/* Snippets List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {snippets.length === 0 && !showForm ? (
-          <div className="col-span-full py-16 text-center studio-card rounded-2xl border-dashed">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 text-indigo-600">
+          <div className="col-span-full py-16 text-center studio-card rounded-[20px] border-dashed">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3 text-indigo-500">
               <ClipboardList className="w-6 h-6" />
             </div>
             <h3 className="text-[17px] font-bold text-slate-900">No voice snippets created yet</h3>
-            <p className="text-[14px] text-slate-600 mt-1 max-w-sm mx-auto font-medium">
+            <p className="text-[14px] text-slate-500 mt-1 max-w-sm mx-auto font-medium">
               Create instant shortcuts for links, email signatures, boilerplate text, or code templates.
             </p>
           </div>
         ) : filteredSnippets.length === 0 ? (
-          <div className="col-span-full py-8 text-center studio-card rounded-2xl">
-            <p className="text-slate-600 font-semibold">No snippets matching "{searchQuery}"</p>
+          <div className="col-span-full py-8 text-center studio-card rounded-[20px]">
+            <p className="text-slate-500 font-semibold">No snippets matching "{searchQuery}"</p>
           </div>
         ) : (
           filteredSnippets.map(snippet => (
-            <div key={snippet.id} className="studio-card p-5 rounded-2xl flex flex-col justify-between group relative space-y-3">
+            <div key={snippet.id} className="studio-card-interactive p-5 rounded-[20px] flex flex-col justify-between group relative space-y-3">
               <div className="flex items-start justify-between gap-2">
-                <span className="text-[12.5px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg">
+                <span className="text-[12.5px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg">
                   "{snippet.trigger_phrase}"
                 </span>
 
-                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleCopy(snippet)}
-                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-indigo-600"
                     title="Copy expansion"
                   >
                     {copiedId === snippet.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                   <button
                     onClick={() => handleEdit(snippet)}
-                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-indigo-600"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-indigo-600"
                     title="Edit snippet"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => removeSnippet(snippet.id)}
-                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-600 hover:text-rose-600 hover:border-rose-200"
+                    className="studio-btn px-2 py-1 rounded-lg text-[12px] font-semibold text-slate-500 hover:text-rose-600 hover:border-rose-200"
                     title="Delete snippet"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -1240,7 +1272,7 @@ function SnippetsTab() {
                 </div>
               </div>
 
-              <p className="text-[14px] text-slate-700 font-mono bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 break-all line-clamp-3">
+              <p className="text-[14px] text-slate-600 font-mono bg-slate-50 p-2.5 rounded-xl break-all line-clamp-3">
                 {snippet.expansion}
               </p>
             </div>
@@ -1252,23 +1284,21 @@ function SnippetsTab() {
 }
 
 function SettingsTab() {
-  const { 
-    apiKey, 
-    setApiKey, 
-    cerebrasApiKey, 
-    setCerebrasApiKey, 
-    whisperModel, 
-    setWhisperModel, 
-    llamaModel, 
-    setLlamaModel, 
-    llamaProvider, 
-    setLlamaProvider, 
-    hotkey, 
-    setHotkey,
-    recomputeStats,
-    history,
-    setHistory
-  } = useAppStore();
+  const apiKey = useAppStore(s => s.apiKey);
+  const setApiKey = useAppStore(s => s.setApiKey);
+  const cerebrasApiKey = useAppStore(s => s.cerebrasApiKey);
+  const setCerebrasApiKey = useAppStore(s => s.setCerebrasApiKey);
+  const whisperModel = useAppStore(s => s.whisperModel);
+  const setWhisperModel = useAppStore(s => s.setWhisperModel);
+  const llamaModel = useAppStore(s => s.llamaModel);
+  const setLlamaModel = useAppStore(s => s.setLlamaModel);
+  const llamaProvider = useAppStore(s => s.llamaProvider);
+  const setLlamaProvider = useAppStore(s => s.setLlamaProvider);
+  const hotkey = useAppStore(s => s.hotkey);
+  const setHotkey = useAppStore(s => s.setHotkey);
+  const recomputeStats = useAppStore(s => s.recomputeStats);
+  const history = useAppStore(s => s.history);
+  const setHistory = useAppStore(s => s.setHistory);
 
   const [groqTestStatus, setGroqTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [groqErrorMsg, setGroqErrorMsg] = useState('');
@@ -1520,100 +1550,83 @@ function SettingsTab() {
   return (
     <div className="pb-16 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="pb-2 border-b border-slate-200/80">
-        <div className="flex items-center gap-2">
-          <span className="text-[11.5px] font-mono font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1.5">
-            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-            Studio Control Center
-          </span>
-        </div>
-        <h1 className="text-[32px] font-extrabold tracking-tight text-slate-900 mt-2 text-studio-gradient">
+      <div className="pb-2">
+        <span className="studio-eyebrow">
+          <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+          Studio Control Center
+        </span>
+        <h1 className="text-[32px] font-extrabold tracking-[-0.03em] text-slate-900 mt-2 leading-[1.08]">
           Preferences & Hardware
         </h1>
-        <p className="text-slate-600 text-[14.5px] mt-1 font-medium">
+        <p className="text-slate-500 text-[14.5px] mt-1.5 font-medium">
           Configure acoustic speech recognition, real-time AI formatting, API credentials, and global triggers.
         </p>
       </div>
 
       {/* Studio Engine Readiness & Telemetry Bar */}
-      <div className="studio-card p-4 sm:p-5 rounded-2xl bg-white/80 border border-slate-200/80 shadow-xs backdrop-blur-md">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="studio-card p-5 rounded-[20px]">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
           {/* Speech-to-Text Acoustic Engine */}
           <div className="flex items-center gap-3 min-w-[200px] flex-1 sm:flex-initial">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 flex-shrink-0 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 flex-shrink-0">
               <Mic className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Speech-to-Text</span>
-                <span className="telemetry-badge text-[9.5px] text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                  Groq LPU
-                </span>
-              </div>
-              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+              <span className="studio-eyebrow !text-[9.5px]">Speech-to-Text</span>
+              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5 tracking-tight">
                 {activeWhisperObj?.label.split(' (')[0] || whisperModel}
               </p>
             </div>
           </div>
 
-          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+          <div className="hidden lg:block h-9 w-px bg-slate-100" />
 
           {/* Inference Polish */}
           <div className="flex items-center gap-3 min-w-[200px] flex-1 sm:flex-initial">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600 flex-shrink-0 shadow-2xs">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500 flex-shrink-0">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Text Polish</span>
-                <span className="telemetry-badge text-[9.5px] text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
-                  {llamaProvider === 'cerebras' ? 'Cerebras Wafer' : 'Groq LPU'}
-                </span>
-              </div>
-              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+              <span className="studio-eyebrow !text-[9.5px]">Text Polish</span>
+              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5 tracking-tight">
                 {activeLlmObj?.label.split(' (')[0] || llamaModel}
               </p>
             </div>
           </div>
 
-          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+          <div className="hidden lg:block h-9 w-px bg-slate-100" />
 
           {/* Hotkey Trigger */}
           <div className="flex items-center gap-3 min-w-[170px] flex-1 sm:flex-initial">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700 flex-shrink-0 shadow-2xs">
-              <Keyboard className="w-4 h-4 text-indigo-600" />
+            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-indigo-500 flex-shrink-0">
+              <Keyboard className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Global Trigger</span>
-                <span className="telemetry-badge text-[9.5px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                  Active
-                </span>
-              </div>
-              <div className="flex items-center gap-1 mt-0.5">
+              <span className="studio-eyebrow !text-[9.5px]">Global Trigger</span>
+              <div className="flex items-center gap-1 mt-1">
                 {formatHotkeyLabel(hotkey).map((k, i) => (
-                  <span key={i} className="keycap text-[11.5px] px-2 py-0.5">{k}</span>
+                  <span key={i} className="keycap text-[11px] px-2 py-0.5">{k}</span>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="hidden lg:block h-9 w-px bg-slate-200/80" />
+          <div className="hidden lg:block h-9 w-px bg-slate-100" />
 
           {/* Credential Vault */}
           <div className="flex items-center gap-3 min-w-[150px] flex-1 sm:flex-initial">
-            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 shadow-2xs ${
-              apiKey ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              apiKey ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
             }`}>
               {apiKey ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             </div>
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Credential Vault</span>
-              <p className="text-[13.5px] font-bold text-slate-900 mt-0.5">
+              <span className="studio-eyebrow !text-[9.5px]">Credential Vault</span>
+              <p className="text-[13.5px] font-bold mt-0.5 tracking-tight">
                 {apiKey ? (
-                  <span className="text-emerald-700 font-bold flex items-center gap-1">Groq Ready</span>
+                  <span className="text-emerald-600">Groq Ready</span>
                 ) : (
-                  <span className="text-rose-600 font-bold flex items-center gap-1">Key Required</span>
+                  <span className="text-rose-500">Key Required</span>
                 )}
               </p>
             </div>
@@ -1622,20 +1635,20 @@ function SettingsTab() {
       </div>
 
       {/* Section 1: Global Shortcut Card */}
-      <div className="studio-card p-6 rounded-2xl space-y-5">
+      <div className="studio-card p-6 rounded-[20px] space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Keyboard className="w-4 h-4 text-indigo-600" />
+              <Keyboard className="w-4 h-4 text-indigo-500" />
               <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Global Dictation Hotkey</h3>
             </div>
-            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+            <p className="text-[13.5px] text-slate-500 font-medium mt-0.5">
               Press and hold from any active desktop app to capture voice and paste polished text.
             </p>
           </div>
           <button
             onClick={resetHotkey}
-            className="studio-btn px-3 py-1.5 rounded-xl text-[12.5px] font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 self-start sm:self-auto"
+            className="studio-btn px-3 py-1.5 rounded-xl text-[12.5px] font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 self-start sm:self-auto"
             title="Reset to default (Ctrl + Win)"
           >
             <RotateCcw className="w-3.5 h-3.5" /> Reset Default
@@ -1660,28 +1673,31 @@ function SettingsTab() {
             }}
             onKeyDown={handleHotkeyRecord}
             onKeyUp={handleHotkeyRelease}
-            className={`w-full studio-input py-4 text-center cursor-pointer flex flex-col items-center justify-center gap-2 transition-all ${
-              isRecordingHotkey 
-                ? 'border-indigo-600 ring-4 ring-indigo-500/15 bg-white shadow-inner' 
-                : 'hover:border-slate-400 bg-slate-50/70'
+            className={`w-full py-5 text-center cursor-pointer flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-150 ${
+              isRecordingHotkey
+                ? 'border-indigo-500 ring-4 ring-indigo-500/10 bg-white shadow-[inset_0_1px_3px_rgba(15,23,42,0.04)]'
+                : 'border-dashed border-slate-300 hover:border-slate-400 bg-slate-50/60'
             }`}
           >
             {isRecordingHotkey && capturedKeys.length === 0 ? (
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[14px] font-semibold text-indigo-600 animate-pulse flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-ping" />
-                  Listening for key combo (e.g. Ctrl + Win, Alt + Space)...
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="text-[14px] font-semibold text-indigo-600 flex items-center gap-2">
+                  <span className="relative flex w-2.5 h-2.5">
+                    <span className="absolute inline-flex w-full h-full rounded-full bg-indigo-400 opacity-60 animate-ping" />
+                    <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                  </span>
+                  Listening for key combo...
                 </span>
-                <span className="text-[12px] text-slate-500">Press modifier + target key simultaneously</span>
+                <span className="text-[12px] text-slate-400 font-medium">Press modifier + target key simultaneously</span>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-1.5">
+              <div className="flex flex-col items-center gap-2">
                 <div className="flex items-center gap-2">
                   {keyDisplayParts.map((k, idx) => (
-                    <span key={idx} className="keycap text-[14px] px-3 py-1 shadow-sm">{k}</span>
+                    <span key={idx} className="keycap text-[14px] px-3 py-1">{k}</span>
                   ))}
                 </div>
-                <span className="text-[11.5px] text-slate-500 font-medium">
+                <span className="text-[11.5px] text-slate-400 font-medium">
                   {isRecordingHotkey ? 'Release keys to save' : 'Click here to record a custom shortcut'}
                 </span>
               </div>
@@ -1690,7 +1706,7 @@ function SettingsTab() {
 
           {/* Quick Presets Pill Selector */}
           <div>
-            <span className="block text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            <span className="studio-eyebrow !text-[10px] block mb-2">
               Quick Shortcut Presets
             </span>
             <div className="flex flex-wrap gap-2">
@@ -1702,13 +1718,13 @@ function SettingsTab() {
                     onClick={() => applyPresetHotkey(preset.value)}
                     className={`px-3 py-1.5 rounded-xl text-[12.5px] font-semibold transition-all flex items-center gap-1.5 ${
                       isActive
-                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300'
-                        : 'studio-btn text-slate-700 hover:text-indigo-600 hover:border-indigo-200'
+                        ? 'bg-indigo-600 text-white shadow-[0_2px_8px_rgba(79,70,229,0.3)]'
+                        : 'studio-btn text-slate-600 hover:text-indigo-600'
                     }`}
                   >
                     <span>{preset.label}</span>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
                     }`}>
                       {preset.tag}
                     </span>
@@ -1723,24 +1739,24 @@ function SettingsTab() {
       {/* Section 2 & 3: Model Selection & Inference Engine (2-Column Grid) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Acoustic Whisper Model */}
-        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+        <div className="studio-card p-6 rounded-[20px] flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
                 <Mic className="w-4 h-4 text-amber-500" />
                 <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Acoustic Recognition</h3>
               </div>
-              <span className="telemetry-badge text-[11px] text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded border border-amber-200">
+              <span className="text-[10px] font-mono font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                 Groq LPU
               </span>
             </div>
-            <p className="text-[13.5px] text-slate-600 font-medium">
+            <p className="text-[13.5px] text-slate-500 font-medium">
               Whisper speech-to-text model for instantaneous, sub-second transcription.
             </p>
           </div>
 
           <div className="space-y-3 pt-2">
-            <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+            <label className="studio-eyebrow !text-[10px] block">
               Whisper Acoustic Model
             </label>
             <div className="relative">
@@ -1763,12 +1779,12 @@ function SettingsTab() {
                 ))}
                 <option value="__custom__">Custom Whisper Model ID...</option>
               </select>
-              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {isCustomWhisperMode && (
               <div className="animate-fade-in pt-1">
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Custom Model Identifier</label>
+                <label className="block text-[12px] font-semibold text-slate-500 mb-1">Custom Model Identifier</label>
                 <input
                   type="text"
                   value={whisperModel}
@@ -1779,44 +1795,44 @@ function SettingsTab() {
               </div>
             )}
 
-            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-[12px] text-slate-600 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>Recommended: <strong className="text-slate-800">Whisper Turbo</strong> for sub-200ms latency.</span>
+            <div className="p-2.5 rounded-xl bg-slate-50 text-[12px] text-slate-500 font-medium flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              <span>Recommended: <strong className="text-slate-700">Whisper Turbo</strong> for sub-200ms latency.</span>
             </div>
           </div>
         </div>
 
         {/* Inference Engine & Provider */}
-        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+        <div className="studio-card p-6 rounded-[20px] flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <Sparkles className="w-4 h-4 text-indigo-500" />
                 <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">AI Formatting & Polish</h3>
               </div>
-              <span className="telemetry-badge text-[11px] text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200">
+              <span className="text-[10px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
                 Text Refinement
               </span>
             </div>
-            <p className="text-[13.5px] text-slate-600 font-medium">
+            <p className="text-[13.5px] text-slate-500 font-medium">
               Cleans filler words, fixes punctuation, and expands voice snippet triggers.
             </p>
           </div>
 
           <div className="space-y-3 pt-2">
-            <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+            <label className="studio-eyebrow !text-[10px] block">
               Inference Provider
             </label>
 
             {/* Provider Switcher */}
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100/90 border border-slate-200">
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100/80">
               <button
                 type="button"
                 onClick={() => handleProviderSwitch('groq')}
                 className={`py-2 px-3 rounded-lg text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
                   llamaProvider === 'groq'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.08)]'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -1827,11 +1843,11 @@ function SettingsTab() {
                 onClick={() => handleProviderSwitch('cerebras')}
                 className={`py-2 px-3 rounded-lg text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
                   llamaProvider === 'cerebras'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.08)]'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Cpu className="w-3.5 h-3.5 text-purple-600" />
+                <Cpu className="w-3.5 h-3.5 text-violet-500" />
                 Cerebras Wafer
               </button>
             </div>
@@ -1857,12 +1873,12 @@ function SettingsTab() {
                 ))}
                 <option value="__custom__">Custom Model ID...</option>
               </select>
-              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
             {isCustomLlamaMode && (
               <div className="animate-fade-in pt-1">
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">
+                <label className="block text-[12px] font-semibold text-slate-500 mb-1">
                   Custom {llamaProvider === 'cerebras' ? 'Cerebras' : 'Groq'} Model ID
                 </label>
                 <input
@@ -1875,38 +1891,38 @@ function SettingsTab() {
               </div>
             )}
 
-            <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/70 text-[12px] text-slate-600 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-              <span>Active: <strong className="text-slate-800">{activeLlmObj?.label.split(' (')[0] || llamaModel}</strong></span>
+            <div className="p-2.5 rounded-xl bg-slate-50 text-[12px] text-slate-500 font-medium flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+              <span>Active: <strong className="text-slate-700">{activeLlmObj?.label.split(' (')[0] || llamaModel}</strong></span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Section 4: Provider Credentials Card */}
-      <div className="studio-card p-6 rounded-2xl space-y-6">
+      <div className="studio-card p-6 rounded-[20px] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Key className="w-4 h-4 text-indigo-600" />
+            <Key className="w-4 h-4 text-indigo-500" />
             <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">API Key Credentials Vault</h3>
           </div>
-          <span className="text-[11px] font-mono text-slate-500 flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Encrypted Local Store
+          <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1.5 font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Encrypted Local Store
           </span>
         </div>
 
         {/* Groq Key */}
-        <div className="space-y-2 pt-2 border-t border-slate-200/60">
+        <div className="space-y-2 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[14px] font-bold text-slate-900">Groq API Key</span>
-              <span className="telemetry-badge text-[10.5px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+              <span className="text-[10px] font-mono font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                 Required for Speech
               </span>
             </div>
             <button
               onClick={() => openUrl('https://console.groq.com/keys')}
-              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
             >
               Get Free Key <ExternalLink className="w-3 h-3" />
             </button>
@@ -1951,17 +1967,17 @@ function SettingsTab() {
         </div>
 
         {/* Cerebras Key */}
-        <div className="space-y-2 pt-4 border-t border-slate-200/60">
+        <div className="space-y-2 pt-4 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[14px] font-bold text-slate-900">Cerebras API Key</span>
-              <span className="telemetry-badge text-[10.5px] text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+              <span className="text-[10px] font-mono font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
                 Optional LLM Provider
               </span>
             </div>
             <button
               onClick={() => openUrl('https://cloud.cerebras.ai/')}
-              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+              className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
             >
               Get Free Key <ExternalLink className="w-3 h-3" />
             </button>
@@ -2005,8 +2021,8 @@ function SettingsTab() {
           )}
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 text-[12px] text-slate-500 font-medium flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+        <div className="p-3 rounded-xl bg-slate-50 text-[12px] text-slate-500 font-medium flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
           <span>API keys are stored strictly in your local app configuration and never uploaded to third-party servers.</span>
         </div>
       </div>
@@ -2014,13 +2030,13 @@ function SettingsTab() {
       {/* Section 5: Software Updates & System Diagnostics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Updates Card */}
-        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+        <div className="studio-card p-6 rounded-[20px] flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-indigo-600" />
+              <RefreshCw className="w-4 h-4 text-indigo-500" />
               <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Software Updates</h3>
             </div>
-            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+            <p className="text-[13.5px] text-slate-500 font-medium mt-0.5">
               Check for published releases and desktop installer updates.
             </p>
           </div>
@@ -2038,15 +2054,15 @@ function SettingsTab() {
 
               <button
                 onClick={() => openReleasePage()}
-                className="studio-btn px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-600 hover:text-slate-900"
+                className="studio-btn px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-500 hover:text-slate-900"
               >
                 View Changelog
               </button>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-              <p className="text-[13px] text-slate-600 font-medium">
-                Installed Version: <span className="font-mono font-bold text-slate-900">v{updateInfo?.currentVersion ?? '0.0.12'}</span>
+            <div className="p-3.5 rounded-xl bg-slate-50">
+              <p className="text-[13px] text-slate-500 font-medium">
+                Installed Version: <span className="telemetry-badge text-slate-900">v{updateInfo?.currentVersion ?? '0.0.12'}</span>
               </p>
 
               {updateStatus === 'current' && updateInfo && (
@@ -2057,7 +2073,7 @@ function SettingsTab() {
 
               {updateStatus === 'available' && updateInfo && (
                 <div className="mt-2 space-y-2">
-                  <p className="text-[13px] font-bold text-amber-700">
+                  <p className="text-[13px] font-bold text-amber-600">
                     New release available: v{updateInfo.latestVersion}
                   </p>
                   <button
@@ -2070,7 +2086,7 @@ function SettingsTab() {
               )}
 
               {updateStatus === 'error' && (
-                <p className="text-[12.5px] font-semibold text-rose-600 mt-1">
+                <p className="text-[12.5px] font-semibold text-rose-500 mt-1">
                   {updateError || 'Unable to connect to update server.'}
                 </p>
               )}
@@ -2079,26 +2095,26 @@ function SettingsTab() {
         </div>
 
         {/* Local Storage & Diagnostics */}
-        <div className="studio-card p-6 rounded-2xl flex flex-col justify-between space-y-4">
+        <div className="studio-card p-6 rounded-[20px] flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-indigo-600" />
+              <HardDrive className="w-4 h-4 text-indigo-500" />
               <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">Diagnostics & Storage</h3>
             </div>
-            <p className="text-[13.5px] text-slate-600 font-medium mt-0.5">
+            <p className="text-[13.5px] text-slate-500 font-medium mt-0.5">
               Maintain audit logs and recompute telemetry metrics across past sessions.
             </p>
           </div>
 
           <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50 space-y-2.5">
               <div className="flex items-center justify-between text-[13px]">
-                <span className="text-slate-600 font-medium">Logged Transcripts:</span>
-                <span className="font-mono font-bold text-slate-900">{history.length} items</span>
+                <span className="text-slate-500 font-medium">Logged Transcripts:</span>
+                <span className="telemetry-badge text-slate-900">{history.length} items</span>
               </div>
               <div className="flex items-center justify-between text-[13px]">
-                <span className="text-slate-600 font-medium">Database Health:</span>
-                <span className="telemetry-badge text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                <span className="text-slate-500 font-medium">Database Health:</span>
+                <span className="text-[10.5px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                   Optimal
                 </span>
               </div>
@@ -2107,7 +2123,7 @@ function SettingsTab() {
             <div className="flex flex-wrap gap-2.5 pt-1">
               <button
                 onClick={handleRecomputeStats}
-                className="studio-btn px-4 py-2 rounded-xl text-[12.5px] font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1.5"
+                className="studio-btn px-4 py-2 rounded-xl text-[12.5px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Recompute Stats
               </button>
@@ -2118,7 +2134,7 @@ function SettingsTab() {
                   className={`px-4 py-2 rounded-xl text-[12.5px] font-bold transition-all flex items-center gap-1.5 ${
                     confirmClearHistory
                       ? 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-300'
-                      : 'studio-btn text-slate-600 hover:text-rose-600 hover:border-rose-200'
+                      : 'studio-btn text-slate-500 hover:text-rose-600 hover:border-rose-200'
                   }`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />

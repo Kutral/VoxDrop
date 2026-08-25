@@ -376,13 +376,19 @@ pub fn run() {
             });
         });
 
-        // Listen for pill-hide events from the frontend to hide the window once
-        // its exit animation finished. A hidden webview stops compositing; an
-        // offscreen-but-visible one kept rendering in the background forever.
+        // Listen for pill-hide events from the frontend. Park the window just
+        // offscreen while KEEPING it visible: a hidden WebView2 suspends
+        // compositing, so the first frame after show() lags and the pill feels
+        // sluggish on hotkey press. A blank 320x48 offscreen webview costs
+        // effectively nothing to keep warm.
         let app_handle = app.handle().clone();
         app.listen("pill-hide", move |_event| {
             if let Some(window) = app_handle.get_webview_window("pill") {
-                let _ = window.hide();
+                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                    x: -9999.0,
+                    y: -9999.0,
+                }));
+                let _ = window.show();
             }
         });
 

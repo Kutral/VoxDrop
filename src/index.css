@@ -39,84 +39,132 @@
 
 @layer base {
   body {
-    @apply bg-[#0C1017] text-slate-900 font-sans antialiased overflow-hidden;
+    @apply text-slate-900 font-sans antialiased overflow-hidden;
+    background: #F5F6F8;
     user-select: none;
   }
 
   ::selection {
-    @apply bg-indigo-500/20 text-indigo-900;
+    @apply bg-indigo-500/20 text-indigo-950;
   }
 
   input, select, textarea, button {
     font-family: inherit;
   }
+
+  /* Visible keyboard focus everywhere */
+  :focus-visible {
+    outline: 2px solid #6366F1;
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
 }
 
 @layer components {
-  /* Studio Base Shell & Panels */
+  /* ---- Canvas ---- */
   .studio-app {
-    background: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F8FAFC 50%, #F1F5F9 100%);
+    background:
+      radial-gradient(1100px 480px at 50% -8%, #FFFFFF 0%, rgba(255, 255, 255, 0) 62%),
+      linear-gradient(180deg, #F7F8FA 0%, #F2F4F7 100%);
   }
 
+  /* ---- Sidebar ---- */
   .studio-sidebar {
-    background: rgba(255, 255, 255, 0.78);
-    border-right: 1px solid rgba(15, 23, 42, 0.07);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    background: rgba(255, 255, 255, 0.72);
+    border-right: 1px solid rgba(15, 23, 42, 0.055);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
   }
 
-  /* Crisp Studio Cards */
+  /* Channel-strip nav: tinted row + 3px signal bar on the active item */
+  .nav-item-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 9999px;
+    background: #4F46E5;
+  }
+
+  /* ---- Surfaces ---- */
   .studio-card {
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 6px 18px -4px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #FFFFFF;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 12px 32px -18px rgba(15, 23, 42, 0.10);
+    transition:
+      border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .studio-card-interactive {
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 6px 18px -4px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #FFFFFF;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 12px 32px -18px rgba(15, 23, 42, 0.10);
+    transition:
+      border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .studio-card-interactive:hover {
-    background: rgba(255, 255, 255, 0.98);
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 1);
-    transform: translateY(-1px);
+    border-color: rgba(79, 70, 229, 0.22);
+    box-shadow:
+      0 2px 4px rgba(15, 23, 42, 0.04),
+      0 18px 40px -18px rgba(15, 23, 42, 0.16);
+    transform: translateY(-2px);
   }
 
-  /* Form Elements: Inputs & Non-truncating Selects */
+  /* ---- Typographic eyebrows (naked, no chip boxes) ---- */
+  .studio-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #94A3B8;
+    white-space: nowrap;
+  }
+
+  /* ---- Form elements ---- */
   .studio-input {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #FFFFFF;
+    border: 1px solid rgba(15, 23, 42, 0.10);
     border-radius: 12px;
     padding: 10px 14px;
     font-size: 14px;
     color: #0F172A;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 0 rgba(255, 255, 255, 0.8);
-    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .studio-input::placeholder {
+    color: #A6B0BF;
   }
   .studio-input:focus {
     outline: none;
     background: #FFFFFF;
     border-color: #6366F1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), inset 0 1px 2px rgba(15, 23, 42, 0.02);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
   }
 
   .studio-select {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #FFFFFF;
+    border: 1px solid rgba(15, 23, 42, 0.10);
     border-radius: 12px;
     padding: 11px 40px 11px 14px;
     font-size: 14px;
     color: #0F172A;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 0 rgba(255, 255, 255, 0.8);
-    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     appearance: none;
     cursor: pointer;
     font-weight: 500;
@@ -124,45 +172,42 @@
   }
   .studio-select:focus {
     outline: none;
-    background: #FFFFFF;
     border-color: #6366F1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), inset 0 1px 2px rgba(15, 23, 42, 0.02);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
   }
 
-  /* Buttons */
+  /* ---- Buttons ---- */
   .studio-btn {
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px);
-    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #FFFFFF;
+    border: 1px solid rgba(15, 23, 42, 0.09);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .studio-btn:hover {
-    background: #FFFFFF;
-    border-color: rgba(15, 23, 42, 0.18);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 1);
+    background: #FAFBFC;
+    border-color: rgba(15, 23, 42, 0.16);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
   }
   .studio-btn:active {
     transform: scale(0.98);
   }
 
   .studio-btn-primary {
-    background: linear-gradient(180deg, #4F46E5 0%, #4338CA 100%);
-    border: 1px solid #3730A3;
+    background: linear-gradient(180deg, #5450E8 0%, #4338CA 100%);
+    border: 1px solid #3D34C9;
     color: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .studio-btn-primary:hover {
-    background: linear-gradient(180deg, #4338CA 0%, #3730A3 100%);
-    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    transform: translateY(-0.5px);
+    background: linear-gradient(180deg, #4640D4 0%, #3B32BE 100%);
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
   .studio-btn-primary:active {
     transform: scale(0.98);
   }
 
-  /* Physical Keyboard Keycaps */
+  /* ---- Keycaps ---- */
   .keycap {
     display: inline-flex;
     align-items: center;
@@ -173,37 +218,60 @@
     font-weight: 600;
     line-height: 1;
     color: #1E293B;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
-    border: 1px solid #CBD5E1;
-    border-bottom: 2px solid #94A3B8;
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    background: linear-gradient(180deg, #FFFFFF 0%, #F2F4F8 100%);
+    border: 1px solid #D3D9E1;
+    border-bottom: 2px solid #B7BFCC;
+    border-radius: 7px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   }
 
-  /* Telemetry / Acoustic Badges */
+  /* ---- Small mono data text (timestamps, units) ---- */
   .telemetry-badge {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
 
-  /* Headings gradient */
+  /* ---- Signal meters ---- */
+  .meter {
+    width: 100%;
+    height: 6px;
+    border-radius: 9999px;
+    background: #EDF0F4;
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ---- Voiceprint sparkline (signature) ---- */
+  .sparkline-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: spark-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+  }
+  @keyframes spark-draw {
+    to { stroke-dashoffset: 0; }
+  }
+
   .text-studio-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-indigo-950 to-indigo-800;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900;
   }
 }
 
-/* Animations */
-@keyframes pulse-slow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.05); }
+/* ---- Entrance animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
+.animate-fade-in {
+  animation: fadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Pill view CSS animations */
+/* ---- Pill view CSS animations ---- */
 .pill-enter {
   opacity: 0;
   transform: scale(0.96) translateY(8px);
@@ -272,12 +340,12 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(148, 163, 184, 0.45);
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.4);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.7);
+  background: rgba(100, 116, 139, 0.65);
 }
 
 @keyframes shimmer {
@@ -286,4 +354,15 @@
 }
 .animate-shimmer {
   animation: shimmer 1.8s infinite ease-in-out;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
