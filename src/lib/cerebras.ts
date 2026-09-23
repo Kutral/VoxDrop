@@ -1,30 +1,10 @@
-function normalizeForComparison(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
-}
+import {
+  computeCleanupTokenBudget,
+  shouldUseRawTranscript,
+  supportsReasoningEffort,
+} from './textCleanup';
 
-function shouldUseRawTranscript(rawText: string, cleanedText: string): boolean {
-  const rawWords = normalizeForComparison(rawText);
-  const cleanedWords = normalizeForComparison(cleanedText);
-
-  if (!cleanedWords.length) {
-    return true;
-  }
-
-  const rawWordSet = new Set(rawWords);
-  const overlapCount = cleanedWords.filter((word) => rawWordSet.has(word)).length;
-  const overlapRatio = overlapCount / Math.max(cleanedWords.length, 1);
-  const looksLikeAssistantReply = /^(sure|absolutely|yes|no|here('| i)?s|the answer|i can|i'm|let me)\b/i.test(
-    cleanedText.trim()
-  );
-
-  return looksLikeAssistantReply || overlapRatio < 0.45;
-}
-
-export const DEFAULT_CEREBRAS_MODEL = 'gemma-4-31b';
+export const DEFAULT_CEREBRAS_MODEL = 'gpt-oss-120b';
 const CEREBRAS_BASE_URL = 'https://api.cerebras.ai/v1';
 
 export async function cleanupTextCerebras(
@@ -51,8 +31,27 @@ STRICT RULES:
 
 CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. Nothing else. No preamble. No explanation. No "Here's the cleaned text:". Just the cleaned text itself.`;
 
-  const inputWordCount = rawText.split(/\s+/).length;
-  const maxOutputTokens = Math.max(128, Math.min(inputWordCount * 4, 1024));
+  const activeModel = model || DEFAULT_CEREBRAS_MODEL;
+  // Budget for the rewrite plus reasoning tokens, which are drawn from the same
+  // completion allowance. Sizing this for the text alone let the model run out
+  // of room mid-sentence and drop the end of the dictation.
+  const maxOutputTokens = computeCleanupTokenBudget(rawText);
+
+  const requestBody: Record<string, unknown> = {
+    model: activeModel,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `[DICTATION TO CLEAN]: ${rawText}` },
+    ],
+    temperature: 0,
+    max_completion_tokens: maxOutputTokens,
+  };
+
+  // Punctuating speech needs no deliberation, so keep reasoning minimal: it
+  // costs latency and competes with the text for the token budget.
+  if (supportsReasoningEffort(activeModel)) {
+    requestBody.reasoning_effort = 'low';
+  }
 
   try {
     const response = await fetch(`${CEREBRAS_BASE_URL}/chat/completions`, {
@@ -61,15 +60,7 @@ CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. 
         'Authorization': `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: model || DEFAULT_CEREBRAS_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `[DICTATION TO CLEAN]: ${rawText}` },
-        ],
-        temperature: 0,
-        max_tokens: maxOutputTokens,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -78,7 +69,13 @@ CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. 
     }
 
     const data = await response.json();
-    const cleanedText = data.choices?.[0]?.message?.content?.trim() || rawText;
+    const choice = data.choices?.[0];
+    if (!choice || choice.finish_reason === 'length') {
+      console.warn('Cerebras cleanup stopped on its output limit; keeping the raw transcript.');
+      return rawText.trim();
+    }
+
+    const cleanedText = choice.message?.content?.trim() || rawText;
     return shouldUseRawTranscript(rawText, cleanedText) ? rawText.trim() : cleanedText;
   } catch (err) {
     console.error('Error during Cerebras cleanup:', err);

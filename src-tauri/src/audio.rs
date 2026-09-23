@@ -44,6 +44,52 @@ fn compute_rms(samples: &[i16]) -> f32 {
     (sum_sq / samples.len() as f64).sqrt() as f32
 }
 
+/// Whisper is fed 16 kHz mono regardless of what the capture device produces —
+/// the API downsamples server-side even if we don't. Doing it here shrinks the
+/// upload, the base64 payload and every in-process copy of the audio by 6x for
+/// a typical 48 kHz stereo microphone.
+const WHISPER_SAMPLE_RATE: u32 = 16_000;
+
+fn to_whisper_pcm(samples: &[i16], sample_rate: u32, channels: u16) -> Vec<i16> {
+    let channels = channels.max(1) as usize;
+    let frame_count = samples.len() / channels;
+    if frame_count == 0 {
+        return Vec::new();
+    }
+
+    // Fold the channels together first.
+    let mut mono: Vec<i16> = Vec::with_capacity(frame_count);
+    for frame in 0..frame_count {
+        let base = frame * channels;
+        let sum: i32 = (0..channels).map(|c| samples[base + c] as i32).sum();
+        // The mean of i16 inputs always fits back into an i16.
+        mono.push((sum / channels as i32) as i16);
+    }
+
+    if sample_rate == WHISPER_SAMPLE_RATE {
+        return mono;
+    }
+
+    // Average over each decimation window. Box filtering is not a steep
+    // low-pass, but it removes the aliasing that plain sample-dropping would
+    // fold back into the speech band.
+    let step = sample_rate as f64 / WHISPER_SAMPLE_RATE as f64;
+    let half_window = (step / 2.0).floor() as usize;
+    let out_frames = (frame_count as f64 / step) as usize;
+    let mut out = Vec::with_capacity(out_frames);
+
+    for index in 0..out_frames {
+        let center = ((index as f64 * step) as usize).min(frame_count - 1);
+        let start = center.saturating_sub(half_window);
+        let end = (center + half_window + 1).min(frame_count);
+        let window = &mono[start..end];
+        let sum: i32 = window.iter().map(|&s| s as i32).sum();
+        out.push((sum / window.len() as i32) as i16);
+    }
+
+    out
+}
+
 pub fn setup_audio(state: &Mutex<AudioState>) -> Result<(), String> {
     let host = cpal::default_host();
     let device = host
@@ -265,10 +311,25 @@ pub fn stop_recording(state: tauri::State<'_, Mutex<AudioState>>) -> Result<Stri
 
     eprintln!("[audio] Recording stopped, {} samples", wav_data.len());
 
+    let pcm = to_whisper_pcm(&wav_data, spec.sample_rate, spec.channels);
+    eprintln!(
+        "[audio] Converted to 16 kHz mono: {} samples (from {})",
+        pcm.len(),
+        wav_data.len()
+    );
+    drop(wav_data);
+
+    let out_spec = WavSpec {
+        channels: 1,
+        sample_rate: WHISPER_SAMPLE_RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
     let mut cursor = Cursor::new(Vec::new());
     {
-        let mut writer = WavWriter::new(&mut cursor, spec).map_err(|e| e.to_string())?;
-        for sample in wav_data {
+        let mut writer = WavWriter::new(&mut cursor, out_spec).map_err(|e| e.to_string())?;
+        for sample in pcm {
             writer.write_sample(sample).map_err(|e| e.to_string())?;
         }
         writer.finalize().map_err(|e| e.to_string())?;
@@ -346,4 +407,31 @@ pub fn unmute_system(did_mute: bool) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn folds_stereo_and_halves_the_frame_rate() {
+        // One second of 48 kHz stereo at a constant level.
+        let samples = vec![1000i16; 48_000 * 2];
+        let out = to_whisper_pcm(&samples, 48_000, 2);
+
+        assert_eq!(out.len(), 16_000, "one second should stay one second");
+        assert!(out.iter().all(|&s| s == 1000), "constant level must survive");
+    }
+
+    #[test]
+    fn leaves_16khz_mono_untouched() {
+        let samples = vec![-500i16, 0, 500];
+        assert_eq!(to_whisper_pcm(&samples, 16_000, 1), samples);
+    }
+
+    #[test]
+    fn handles_empty_and_sub_frame_input() {
+        assert!(to_whisper_pcm(&[], 48_000, 2).is_empty());
+        assert!(to_whisper_pcm(&[7i16], 48_000, 2).is_empty());
+    }
 }

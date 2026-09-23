@@ -311,8 +311,10 @@ export function PillView() {
           };
 
           useAppStore.getState().addHistoryItem(historyItem);
-          await emit('history-sync', historyItem);
           await invoke('paste_text', { text: cleanText });
+          // Other windows only mirror the dashboard, so don't hold up the paste
+          // waiting on that broadcast.
+          emit('history-sync', historyItem).catch(() => {});
 
           playSuccessEarcon();
           setPillState('done');

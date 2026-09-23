@@ -1885,7 +1885,7 @@ function SettingsTab() {
                   type="text"
                   value={llamaModel}
                   onChange={(e) => setLlamaModel(e.target.value.trim())}
-                  placeholder={llamaProvider === 'cerebras' ? 'e.g. gemma-4-31b' : 'e.g. openai/gpt-oss-20b'}
+                  placeholder={llamaProvider === 'cerebras' ? 'e.g. gpt-oss-120b' : 'e.g. openai/gpt-oss-20b'}
                   className="studio-input w-full font-mono text-[13px]"
                 />
               </div>

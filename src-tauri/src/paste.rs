@@ -155,12 +155,17 @@ pub fn paste_text(text: String) -> Result<(), String> {
                 ));
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(50));
-
-            if OpenClipboard(std::ptr::null_mut()) != 0 {
-                EmptyClipboard();
-                CloseClipboard();
-            }
+            // The target window only reads the clipboard once it processes the
+            // Ctrl+V we just queued, so the clipboard must outlive this call.
+            // Wait on a detached thread so the delay no longer blocks the
+            // caller (and therefore the end of the dictation).
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                if OpenClipboard(std::ptr::null_mut()) != 0 {
+                    EmptyClipboard();
+                    CloseClipboard();
+                }
+            });
         }
     }
 

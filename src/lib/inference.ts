@@ -7,13 +7,12 @@ export type LLMProvider = 'groq' | 'cerebras';
 export const GROQ_MODEL_PRESETS = [
   { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Fast & Accurate)', tag: 'Recommended' },
   { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Flagship)', tag: 'Versatile' },
-  { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B', tag: 'Reasoning' },
-  { id: 'allam-2-7b', label: 'ALLaM 2 7B V1', tag: 'Multilingual' },
+  { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', tag: 'Reasoning' },
 ];
 
 export const CEREBRAS_MODEL_PRESETS = [
-  { id: 'gemma-4-31b', label: 'Gemma 4 31B (Cerebras Ultra-Fast)', tag: 'Recommended' },
-  { id: 'gpt-oss-120b', label: 'GPT-OSS 120B (Cerebras Flagship)', tag: 'Flagship' },
+  { id: 'gpt-oss-120b', label: 'GPT-OSS 120B (Cerebras Ultra-Fast)', tag: 'Recommended' },
+  { id: 'qwen-3.8-27b', label: 'Qwen 3.8 27B (Cerebras Fast)', tag: 'Reasoning' },
 ];
 
 export const WHISPER_MODEL_PRESETS = [

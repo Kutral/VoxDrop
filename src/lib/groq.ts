@@ -1,50 +1,46 @@
 import Groq from "groq-sdk";
-
-function normalizeForComparison(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function shouldUseRawTranscript(rawText: string, cleanedText: string): boolean {
-  const rawWords = normalizeForComparison(rawText);
-  const cleanedWords = normalizeForComparison(cleanedText);
-
-  if (!cleanedWords.length) {
-    return true;
-  }
-
-  const rawWordSet = new Set(rawWords);
-  const overlapCount = cleanedWords.filter((word) => rawWordSet.has(word)).length;
-  const overlapRatio = overlapCount / Math.max(cleanedWords.length, 1);
-  const looksLikeAssistantReply = /^(sure|absolutely|yes|no|here('| i)?s|the answer|i can|i'm|let me)\b/i.test(
-    cleanedText.trim()
-  );
-
-  return looksLikeAssistantReply || overlapRatio < 0.45;
-}
+import {
+  computeCleanupTokenBudget,
+  shouldUseRawTranscript,
+  supportsReasoningEffort,
+} from "./textCleanup";
 
 export const DEFAULT_GROQ_CHAT_MODEL = "openai/gpt-oss-20b";
 export const DEFAULT_GROQ_WHISPER_MODEL = "whisper-large-v3-turbo";
+
+/**
+ * The SDK client is reused across calls so its HTTP connection stays alive.
+ * Building a fresh client per request paid for a new TLS handshake on every
+ * dictation.
+ */
+let cachedClient: { apiKey: string; client: Groq } | null = null;
+
+function getGroqClient(apiKey: string): Groq {
+  const key = apiKey.trim();
+  if (!cachedClient || cachedClient.apiKey !== key) {
+    cachedClient = {
+      apiKey: key,
+      client: new Groq({ apiKey: key, dangerouslyAllowBrowser: true }),
+    };
+  }
+  return cachedClient.client;
+}
 
 export async function transcribeAudio(
   base64Audio: string,
   apiKey: string,
   model: string = DEFAULT_GROQ_WHISPER_MODEL
 ): Promise<string> {
-  const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
+  const groq = getGroqClient(apiKey);
 
-  // Convert base64 to File object
-  const byteCharacters = atob(base64Audio);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  // Decode straight into a typed array: the previous per-character intermediate
+  // `Array` doubled the allocation and the work, on the UI thread.
+  const binary = atob(base64Audio);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
-  const byteArray = new Uint8Array(byteNumbers);
-  const blob = new Blob([byteArray], { type: "audio/wav" });
-  const file = new File([blob], "audio.wav", { type: "audio/wav" });
+  const file = new File([bytes], "audio.wav", { type: "audio/wav" });
 
   const transcription = await groq.audio.transcriptions.create({
     file: file,
@@ -65,7 +61,8 @@ export async function cleanupText(
     return rawText;
   }
 
-  const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
+  const groq = getGroqClient(apiKey);
+  const activeModel = model || DEFAULT_GROQ_CHAT_MODEL;
 
   const systemPrompt = `You are a DICTATION TEXT FORMATTER. You are NOT a chatbot. You are NOT an assistant. You do NOT answer questions. You do NOT have conversations.
 
@@ -82,9 +79,10 @@ STRICT RULES:
 
 CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. Nothing else. No preamble. No explanation. No "Here's the cleaned text:". Just the cleaned text itself.`;
 
-  // Cap output tokens to prevent the model from generating content
-  const inputWordCount = rawText.split(/\s+/).length;
-  const maxOutputTokens = Math.max(128, Math.min(inputWordCount * 4, 1024));
+  // Budget for the rewrite plus reasoning tokens, which are drawn from the same
+  // completion allowance. Sizing this for the text alone let the model run out
+  // of room mid-sentence and drop the end of the dictation.
+  const maxOutputTokens = computeCleanupTokenBudget(rawText);
 
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -92,12 +90,21 @@ CRITICAL: Your output must contain ONLY the cleaned version of what was spoken. 
         { role: "system", content: systemPrompt },
         { role: "user", content: `[DICTATION TO CLEAN]: ${rawText}` },
       ],
-      model: model || DEFAULT_GROQ_CHAT_MODEL,
+      model: activeModel,
       temperature: 0,
-      max_tokens: maxOutputTokens,
+      max_completion_tokens: maxOutputTokens,
+      // Punctuating speech needs no deliberation, so keep reasoning minimal:
+      // it costs latency and competes with the text for the token budget.
+      ...(supportsReasoningEffort(activeModel) ? { reasoning_effort: "low" as const } : {}),
     });
 
-    const cleanedText = chatCompletion.choices[0]?.message?.content?.trim() || rawText;
+    const choice = chatCompletion.choices[0];
+    if (!choice || choice.finish_reason === "length") {
+      console.warn("Cleanup stopped on its output limit; keeping the raw transcript.");
+      return rawText.trim();
+    }
+
+    const cleanedText = choice.message?.content?.trim() || rawText;
     return shouldUseRawTranscript(rawText, cleanedText) ? rawText.trim() : cleanedText;
   } catch (err) {
     console.error('Error during Groq cleanup:', err);
@@ -115,7 +122,7 @@ export async function testApiKey(apiKey: string): Promise<KeyValidationResult> {
     return { valid: false, error: 'API key is required' };
   }
   try {
-    const groq = new Groq({ apiKey: apiKey.trim(), dangerouslyAllowBrowser: true });
+    const groq = getGroqClient(apiKey);
     await groq.models.list();
     return { valid: true };
   } catch (err: any) {

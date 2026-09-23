@@ -73,6 +73,79 @@ function normalizeWhitespace(text: string): string {
     .trim();
 }
 
+/* ------------------------------------------------------------------ */
+/*  Shared helpers for LLM-based cleanup (Groq + Cerebras)             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Words that must be reserved for the model's reasoning tokens on top of the
+ * rewritten text. Reasoning tokens are billed against the same completion
+ * budget as the answer, so a budget sized only for the output text lets the
+ * model run out of room mid-sentence and silently drop the tail.
+ */
+const CLEANUP_REASONING_HEADROOM_TOKENS = 1024;
+const CLEANUP_MIN_TOKENS = 1024;
+const CLEANUP_MAX_TOKENS = 8192;
+
+/**
+ * Completion budget for a cleanup request: enough for a verbatim rewrite of the
+ * transcript (roughly 3 tokens per word) plus reasoning headroom.
+ */
+export function computeCleanupTokenBudget(rawText: string): number {
+  const wordCount = rawText.split(/\s+/).filter(Boolean).length;
+  const textTokens = Math.ceil(wordCount * 3);
+  return Math.min(
+    Math.max(textTokens + CLEANUP_REASONING_HEADROOM_TOKENS, CLEANUP_MIN_TOKENS),
+    CLEANUP_MAX_TOKENS,
+  );
+}
+
+/**
+ * Only reasoning-capable models accept `reasoning_effort`. Sending it to any
+ * other model makes the request fail, which would cost a whole dictation.
+ */
+export function supportsReasoningEffort(model: string): boolean {
+  return /gpt-oss|qwen3/i.test(model);
+}
+
+export function normalizeForComparison(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Decide whether the model's rewrite should be discarded in favor of the raw
+ * transcript. Guards against three separate failure modes: an empty response,
+ * the model answering the dictation instead of formatting it, and the model
+ * dropping part of the transcript without reporting a length stop.
+ */
+export function shouldUseRawTranscript(rawText: string, cleanedText: string): boolean {
+  const rawWords = normalizeForComparison(rawText);
+  const cleanedWords = normalizeForComparison(cleanedText);
+
+  if (!cleanedWords.length) {
+    return true;
+  }
+
+  // A rewrite should stay close to the transcript length. Removing filler words
+  // never halves a dictation, so a large collapse means content was dropped.
+  if (rawWords.length >= 12 && cleanedWords.length < rawWords.length * 0.4) {
+    return true;
+  }
+
+  const rawWordSet = new Set(rawWords);
+  const overlapCount = cleanedWords.filter((word) => rawWordSet.has(word)).length;
+  const overlapRatio = overlapCount / Math.max(cleanedWords.length, 1);
+  const looksLikeAssistantReply = /^(sure|absolutely|yes|no|here('| i)?s|the answer|i can|i'm|let me)\b/i.test(
+    cleanedText.trim()
+  );
+
+  return looksLikeAssistantReply || overlapRatio < 0.45;
+}
+
 /**
  * Perform local text cleanup without any API calls.
  * This is the free-tier alternative to Groq LLM cleanup.

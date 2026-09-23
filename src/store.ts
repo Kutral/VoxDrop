@@ -18,6 +18,38 @@ interface HistoryItem {
 const MAX_HISTORY_ITEMS = 100;
 export const DEFAULT_HOTKEY = 'Control+Super';
 
+// Model IDs that are no longer served by either provider. Groq retired the
+// Llama family and ALLaM 2 7B, and renamed Qwen 3.6 to 3.8; Cerebras dropped
+// Gemma in favour of GPT-OSS. Requests against a retired ID fail outright, so
+// the dictation silently degrades to regex cleanup.
+const RETIRED_LLAMA_MODELS = new Set([
+  'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
+  'llama3-8b-8192',
+  'llama3-70b-8192',
+  'groq/compound-mini',
+  'llama-3.3-70b',
+  'llama3.1-8b',
+  'qwen/qwen3.6-27b',
+  'qwen3.6-27b',
+  'allam-2-7b',
+  'gemma-4-31b',
+]);
+
+// Preset IDs are provider-namespaced, so a model carried across a provider
+// switch resolves against the wrong catalogue.
+const MODEL_ALIASES: Record<LLMProvider, Record<string, string>> = {
+  groq: {
+    'gpt-oss-120b': 'openai/gpt-oss-120b',
+    'qwen-3.8-27b': 'qwen/qwen3.8-27b',
+  },
+  cerebras: {
+    'openai/gpt-oss-20b': 'gpt-oss-120b',
+    'openai/gpt-oss-120b': 'gpt-oss-120b',
+    'qwen/qwen3.8-27b': 'qwen-3.8-27b',
+  },
+};
+
 export const getWeekIndex = (dateString: string) => {
   const date = new Date(dateString);
   const sunday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
@@ -153,20 +185,18 @@ export const useAppStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
 
-        if (
-          state.llamaModel === 'llama-3.1-8b-instant' ||
-          state.llamaModel === 'llama-3.3-70b-versatile' ||
-          state.llamaModel === 'llama3-8b-8192' ||
-          state.llamaModel === 'llama3-70b-8192' ||
-          state.llamaModel === 'groq/compound-mini' ||
-          state.llamaModel === 'llama-3.3-70b' ||
-          state.llamaModel === 'llama3.1-8b'
-        ) {
-          state.llamaModel =
-            state.llamaProvider === 'cerebras' ? 'gemma-4-31b' : 'openai/gpt-oss-20b';
-        }
         if (!state.llamaProvider) {
           state.llamaProvider = 'groq';
+        }
+
+        if (RETIRED_LLAMA_MODELS.has(state.llamaModel)) {
+          state.llamaModel =
+            state.llamaProvider === 'cerebras' ? 'gpt-oss-120b' : 'openai/gpt-oss-20b';
+        }
+
+        const aliases = MODEL_ALIASES[state.llamaProvider];
+        if (aliases && aliases[state.llamaModel]) {
+          state.llamaModel = aliases[state.llamaModel];
         }
 
         const recomputed = computeStatsFromHistory(state.history || []);
