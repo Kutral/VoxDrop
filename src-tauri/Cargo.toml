@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appvoxdrop"
-version = "0.0.15"
+version = "0.0.16"
 description = "Hold a hotkey, speak, release: polished text at your cursor"
 authors = ["Kutraleeswaran B"]
 edition = "2021"

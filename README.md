@@ -50,13 +50,18 @@
 <details>
 <summary><strong>Model lineup</strong> — Whisper for ears, an LLM for manners</summary>
 
-| Stage | Options |
-|---|---|
-| Transcription | Whisper **Turbo** (fastest) or Whisper **Large v3** (better with accents and names) |
-| Text polish, Groq | GPT-OSS 20B (default) or GPT-OSS 120B |
-| Text polish, Cerebras | GPT-OSS 120B |
+| Stage | Model | Speed |
+|---|---|---|
+| Transcription | Whisper **Turbo** (default) | ~0.6 s for 20 s of audio |
+| | Whisper **Large v3**, better with accents and names | ~0.7 s for 20 s of audio |
+| Polish, Groq | **Qwen 3.8 27B** (default), best formatting | ~0.2 s |
+| | GPT-OSS 20B | ~0.6 s |
+| | GPT-OSS 120B | ~0.8 s |
+| | ALLaM 2 7B, fastest but keeps fillers (built for Arabic) | ~0.15 s |
+| Polish, Cerebras | **GPT-OSS 120B** (default) | ~3000 tok/s (published) |
+| | Qwen 3.8 27B | ~1,850 tok/s (published) |
 
-Switch providers and models any time in Settings, or turn polish off entirely. Pasting a key tests it automatically. If a model is retired, VoxDrop falls back to the default instead of failing.
+Groq times are measured cleanup round trips on a typical dictation. The model picker shows these speeds, lists any other chat model your key can use, and greys out ones it can't. Switch providers and models any time in Settings, or turn polish off entirely. Pasting a key tests it automatically. If a model is retired, VoxDrop falls back to the default instead of failing.
 
 </details>
 
@@ -92,7 +97,9 @@ Switch providers and models any time in Settings, or turn polish off entirely. P
 Two windows, one Rust core:
 
 - **Dashboard** (`index.html`): history, snippets and settings. Closing it frees its memory; VoxDrop keeps running in the tray.
-- **Pill** (`pill.html`): a tiny separate page in a transparent overlay, pre-created at startup so it appears the instant you press the hotkey. It never loads the dashboard's code.
+- **Pill** (`pill.html`): a tiny separate page in a transparent overlay, pre-created at startup so it appears within milliseconds of the hotkey. It shows a hollow dot while the microphone opens and plays the start tone only once it is live, so no words go into a closed mic. It never loads the dashboard's code.
+
+**Instant start** (Settings → Recording, off by default): opening a Windows microphone stream takes 0.4–1 s on some laptops. With Instant start on, VoxDrop keeps the stream open between dictations so recording begins the moment you press; Windows shows the mic-in-use icon while it is on.
 
 The Rust layer owns the dictation session from press to release: the low-level keyboard hook, audio capture via `cpal` (16 kHz mono, silence trimmed before upload), media pause/resume, and clipboard pasting via Win32, which puts your previous clipboard text back afterwards.
 
