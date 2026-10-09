@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/dashboard-v0.0.14.png" alt="The VoxDrop dashboard — aurora hero with a 14-day voiceprint, floating dock, and dictation telemetry" width="760" />
+  <img src="docs/assets/dashboard-v0.0.16.png" alt="The VoxDrop dashboard: your latest dictation set as text, with each dictation drawn as a strip of tape, one tick per word" width="720" />
 </p>
 
 ## How it works
@@ -52,11 +52,11 @@
 
 | Stage | Options |
 |---|---|
-| Transcription | Whisper **Turbo** (near-instant) · Whisper **Large V3** (max quality) |
-| Text polish — Groq | GPT-OSS 20B · GPT-OSS 120B · Qwen 3.6 27B · ALLaM 2 7B |
-| Text polish — Cerebras | Gemma 4 31B · GPT-OSS 120B |
+| Transcription | Whisper **Turbo** (fastest) or Whisper **Large v3** (better with accents and names) |
+| Text polish, Groq | GPT-OSS 20B (default) or GPT-OSS 120B |
+| Text polish, Cerebras | GPT-OSS 120B |
 
-Switch providers and models any time in Preferences. Inline key testing confirms credentials before your first dictation.
+Switch providers and models any time in Settings, or turn polish off entirely. Pasting a key tests it automatically. If a model is retired, VoxDrop falls back to the default instead of failing.
 
 </details>
 
@@ -68,7 +68,7 @@ Switch providers and models any time in Preferences. Inline key testing confirms
 
 <p align="center">
   Templates, signatures, code blocks — anything you repeat.<br/>
-  Create one in the <strong>Snippets</strong> tab: trigger <code>sign-off</code>, expansion <code>Best regards, John</code> — done.
+  Create one in the <strong>Snippets</strong> tab: phrase <code>sign off</code>, text <code>Best regards, John</code> — done.
 </p>
 
 ## Installation
@@ -77,7 +77,7 @@ Switch providers and models any time in Preferences. Inline key testing confirms
 |---|---|
 | **1** | Download [`VoxDrop_x64-setup.exe`](https://github.com/Kutral/VoxDrop/releases/latest) (or the `.msi`) from Releases |
 | **2** | Install, launch from the Start Menu |
-| **3** | Preferences → paste your free [Groq API key](https://console.groq.com/keys) → **Authenticate** |
+| **3** | VoxDrop opens on Settings: paste your free [Groq API key](https://console.groq.com/keys) and it is tested automatically |
 
 > **Requirements:** Windows 10/11 64-bit · WebView2 (auto-installed) · free Groq account
 >
@@ -91,10 +91,10 @@ Switch providers and models any time in Preferences. Inline key testing confirms
 
 Two windows, one Rust core:
 
-- **Main window** — the React dashboard: telemetry, history, snippets, preferences
-- **Pill window** — a transparent overlay pre-created at startup and kept render-ready, so the dictation UI appears the instant you release the hotkey
+- **Dashboard** (`index.html`): history, snippets and settings. Closing it frees its memory; VoxDrop keeps running in the tray.
+- **Pill** (`pill.html`): a tiny separate page in a transparent overlay, pre-created at startup so it appears the instant you press the hotkey. It never loads the dashboard's code.
 
-The Rust layer owns everything latency-sensitive: the low-level keyboard hook, audio capture via `cpal`, media control via the `windows` crate, and clipboard pasting via Win32 — keeping hotkey-to-recording under 50 ms.
+The Rust layer owns the dictation session from press to release: the low-level keyboard hook, audio capture via `cpal` (16 kHz mono, silence trimmed before upload), media pause/resume, and clipboard pasting via Win32, which puts your previous clipboard text back afterwards.
 
 <details>
 <summary><strong>Build from source</strong></summary>
