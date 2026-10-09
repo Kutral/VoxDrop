@@ -1,43 +1,41 @@
 /** @type {import('tailwindcss').Config} */
+const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './pill.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      colors: {
+        paper: token('paper'),
+        surface: token('surface'),
+        ink: token('ink'),
+        mist: token('mist'),
+        line: token('line'),
+        field: token('field'),
+        signal: token('signal'),
+        moss: token('moss'),
+        brick: token('brick'),
+        'on-ink': token('on-ink'),
+      },
       fontFamily: {
-        sans: ['Outfit', 'system-ui', 'sans-serif'],
+        sans: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
+        serif: ['Newsreader', 'Georgia', 'serif'],
       },
-      animation: {
-        pulse: "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        float: "float 6s ease-in-out infinite",
-        'float-delayed': "float 6s ease-in-out 3s infinite",
-        'fade-in': 'fadeIn 100ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        'blob': 'blob 12s infinite alternate',
-        'shimmer': 'shimmer 3s infinite linear',
+      // One scale, used everywhere. Nothing smaller than 12px.
+      fontSize: {
+        caption: ['12px', { lineHeight: '16px' }],
+        body: ['14px', { lineHeight: '20px' }],
+        transcript: ['17px', { lineHeight: '26px' }],
+        heading: ['15px', { lineHeight: '20px', fontWeight: '600' }],
+        title: ['22px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '600' }],
+        metric: ['28px', { lineHeight: '32px', letterSpacing: '-0.02em', fontWeight: '600' }],
       },
-      keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-20px)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0', transform: 'translateY(2px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        blob: {
-          '0%': { transform: 'translate(0px, 0px) scale(1)' },
-          '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-          '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-          '100%': { transform: 'translate(0px, 0px) scale(1)' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-      }
+      borderRadius: {
+        chip: '6px',
+        control: '8px',
+        panel: '12px',
+      },
     },
   },
   plugins: [],
-}
+};

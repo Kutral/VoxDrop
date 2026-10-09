@@ -1,13 +1,10 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 mod audio;
-mod db;
 mod paste;
 mod windows_hotkey;
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
 
 use tauri::menu::MenuBuilder;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -19,6 +16,20 @@ const DEFAULT_WINDOW_HEIGHT: f64 = 780.0;
 const TRAY_ID: &str = "voxdrop-tray";
 const TRAY_SHOW_ID: &str = "show";
 const TRAY_QUIT_ID: &str = "quit";
+
+/// The pill window is larger than the visible capsule so its shadow isn't
+/// clipped; the page centres the capsule inside it.
+const PILL_WINDOW_W: f64 = 360.0;
+const PILL_WINDOW_H: f64 = 72.0;
+/// Gap between the pill window's bottom edge and the taskbar.
+const PILL_BOTTOM_MARGIN: f64 = 56.0;
+
+/// The hotkey string that is actually registered right now.
+struct HotkeyState(Mutex<String>);
+
+/// Incremented on every press, so a release watchdog can tell whether the
+/// session it was guarding is still the current one.
+static SESSION: AtomicU64 = AtomicU64::new(0);
 
 fn hotkey_is_modifier_only(value: &str) -> bool {
     let mut part_count = 0;
@@ -46,50 +57,24 @@ fn force_present_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
-    let _ = window.set_always_on_top(true);
-    let _ = window.set_always_on_top(false);
 
     #[cfg(windows)]
     {
-        match window.hwnd() {
-            Ok(hwnd) => {
-                eprintln!("[window] presenting hwnd={hwnd:?}");
-                let handle = hwnd.0 as windows_sys::Win32::Foundation::HWND;
-                unsafe {
-                    windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
-                        handle,
-                        windows_sys::Win32::UI::WindowsAndMessaging::SW_RESTORE,
-                    );
-                    windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
-                        handle,
-                        windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW,
-                    );
-                    windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                        handle,
-                        windows_sys::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
-                        0,
-                        0,
-                        0,
-                        0,
-                        windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
-                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
-                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
-                    );
-                    windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                        handle,
-                        windows_sys::Win32::UI::WindowsAndMessaging::HWND_NOTOPMOST,
-                        0,
-                        0,
-                        0,
-                        0,
-                        windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
-                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
-                            | windows_sys::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
-                    );
-                    windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(handle);
-                }
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SetForegroundWindow, SetWindowPos, ShowWindow, HWND_NOTOPMOST, HWND_TOPMOST,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_RESTORE,
+        };
+        if let Ok(hwnd) = window.hwnd() {
+            let handle = hwnd.0 as windows_sys::Win32::Foundation::HWND;
+            unsafe {
+                ShowWindow(handle, SW_RESTORE);
+                // Briefly topmost: Windows otherwise refuses to raise a window
+                // from a background process (tray click, second launch).
+                let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
+                SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, flags);
+                SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, flags);
+                SetForegroundWindow(handle);
             }
-            Err(err) => eprintln!("[window] hwnd unavailable: {err}"),
         }
     }
 }
@@ -124,9 +109,6 @@ fn fit_window_to_work_area<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) 
     let available_inner_width = work.size.width.saturating_sub(chrome_width);
     let available_inner_height = work.size.height.saturating_sub(chrome_height);
 
-    // Preferred size from the window config at the current scale — creation-time
-    // DPI quirks can leave the window smaller than configured, and a config size
-    // taller than the work area gets its title bar pushed off-screen by Windows.
     let desired_inner_width = (DEFAULT_WINDOW_WIDTH * scale) as u32;
     let desired_inner_height = (DEFAULT_WINDOW_HEIGHT * scale) as u32;
 
@@ -147,13 +129,33 @@ fn fit_window_to_work_area<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) 
     let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
 }
 
+/// Show the dashboard, recreating it if it was closed. Closing destroys the
+/// dashboard's webview instead of hiding it, which hands its renderer
+/// process's memory back to the system while VoxDrop idles in the tray.
 fn show_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
-        eprintln!("[window] show_main_window");
         force_present_window(&window);
-    } else {
-        eprintln!("[window] main missing");
+        return;
     }
+
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if handle.get_webview_window("main").is_some() {
+            return;
+        }
+        let Some(config) = handle.config().app.windows.iter().find(|w| w.label == "main").cloned()
+        else {
+            eprintln!("[window] main window config missing");
+            return;
+        };
+        match WebviewWindowBuilder::from_config(&handle, &config).and_then(|b| b.build()) {
+            Ok(window) => {
+                fit_window_to_work_area(&window);
+                force_present_window(&window);
+            }
+            Err(err) => eprintln!("[window] could not reopen main window: {err}"),
+        }
+    });
 }
 
 fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<tauri::WebviewWindow<R>> {
@@ -161,20 +163,25 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
         return Some(window);
     }
 
-    let builder = WebviewWindowBuilder::new(app, "pill", WebviewUrl::App("index.html".into()))
-        .title("Voxdrop Pill")
-        .inner_size(320.0, 48.0)
+    // `pill.html` is a separate, tiny entry point: the overlay never loads the
+    // dashboard's code.
+    let builder = WebviewWindowBuilder::new(app, "pill", WebviewUrl::App("pill.html".into()))
+        .title("VoxDrop pill")
+        .inner_size(PILL_WINDOW_W, PILL_WINDOW_H)
         .decorations(false)
+        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)
         .focused(false)
+        .focusable(false)
         .resizable(false)
         .transparent(true);
 
     match builder.build() {
         Ok(window) => {
-            eprintln!("[window] created pill");
+            // A status overlay: clicks go to whatever is underneath.
+            let _ = window.set_ignore_cursor_events(true);
             Some(window)
         }
         Err(err) => {
@@ -184,15 +191,23 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
     }
 }
 
+/// Bottom-centre of the work area on the monitor under the mouse, so the pill
+/// appears where the user is working on multi-monitor setups.
 fn position_and_show_pill<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    if let Ok(Some(monitor)) = window.primary_monitor() {
-        let screen_size = monitor.size();
+    let monitor = window
+        .cursor_position()
+        .ok()
+        .and_then(|p| window.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+
+    if let Some(monitor) = monitor {
         let scale = monitor.scale_factor();
-        let pill_w = 320.0;
-        let pill_h = 48.0;
-        let x = ((screen_size.width as f64 / scale) - pill_w) / 2.0;
-        let y = (screen_size.height as f64 / scale) - pill_h - 80.0;
-        let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+        let work = monitor.work_area();
+        let w = (PILL_WINDOW_W * scale) as i32;
+        let h = (PILL_WINDOW_H * scale) as i32;
+        let x = work.position.x + (work.size.width as i32 - w) / 2;
+        let y = work.position.y + work.size.height as i32 - h - (PILL_BOTTOM_MARGIN * scale) as i32;
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
     }
     let _ = window.show();
 }
@@ -203,8 +218,6 @@ fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         return;
     }
 
-    // Pill was never created (or creation failed earlier): build it on the main
-    // thread, then position and show it.
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = ensure_pill_window(&handle) {
@@ -213,38 +226,103 @@ fn show_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     });
 }
 
-#[tauri::command]
-fn update_hotkey(app: tauri::AppHandle, new_hotkey: String) -> Result<(), String> {
+fn apply_hotkey<R: tauri::Runtime>(app: &tauri::AppHandle<R>, hotkey: &str) -> Result<(), String> {
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-    let normalized_hotkey = new_hotkey.trim().to_string();
-
-    // Unregister whatever is currently active
-    let _ = app.global_shortcut().unregister_all();
-
-    if hotkey_is_modifier_only(&normalized_hotkey) {
-        windows_hotkey::set_hotkey(&normalized_hotkey);
+    if hotkey_is_modifier_only(hotkey) {
+        let _ = app.global_shortcut().unregister_all();
+        windows_hotkey::set_hotkey(hotkey);
         return Ok(());
     }
 
+    // Validate before touching the working binding.
+    let shortcut = Shortcut::from_str(hotkey).map_err(|_| {
+        format!("\"{hotkey}\" isn't a shortcut VoxDrop can use. Try another combination.")
+    })?;
+    let _ = app.global_shortcut().unregister_all();
     windows_hotkey::set_hotkey("");
+    app.global_shortcut().register(shortcut).map_err(|_| {
+        format!("Another app is already using {}. Pick a different shortcut.", hotkey.replace('+', " + "))
+    })
+}
 
-    // Register the new hotkey
-    let new_shortcut = Shortcut::from_str(&normalized_hotkey)
-        .map_err(|e| format!("Invalid shortcut format: {}", e))?;
+/// Switch the dictation hotkey. On failure the previous hotkey stays active,
+/// so the app is never left without one.
+#[tauri::command]
+fn update_hotkey(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, HotkeyState>,
+    new_hotkey: String,
+) -> Result<(), String> {
+    let next = new_hotkey.trim().to_string();
+    let mut current = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    if *current == next {
+        return Ok(());
+    }
 
-    app.global_shortcut()
-        .register(new_shortcut)
-        .map_err(|e| format!("Failed to register shortcut: {}", e))?;
+    match apply_hotkey(&app, &next) {
+        Ok(()) => {
+            *current = next;
+            Ok(())
+        }
+        Err(err) => {
+            if let Err(restore_err) = apply_hotkey(&app, &current) {
+                eprintln!("[hotkey] could not restore '{}': {restore_err}", *current);
+            }
+            Err(err)
+        }
+    }
+}
 
-    Ok(())
+fn on_shortcut_down<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    let state = app.state::<audio::AudioState>();
+
+    // Capture first: every millisecond before the stream starts is a lost
+    // syllable. The pill renders its own "listening" state from the event.
+    let mut started = false;
+    if audio::capture_enabled(&state) {
+        match audio::start_recording_internal(&state) {
+            Ok(did_start) => started = did_start,
+            Err(err) => {
+                eprintln!("[audio] Failed to start recording: {err}");
+                let _ = app.emit("recording-error", err);
+            }
+        }
+    }
+
+    show_pill_window(app);
+
+    if started && SESSION.load(Ordering::SeqCst) == session {
+        audio::mute_for_dictation(&state);
+    }
+}
+
+fn on_shortcut_up<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    // The pill normally collects the audio within milliseconds. If its page
+    // isn't listening (still loading, crashed), make sure the mic and media
+    // don't stay captured forever.
+    let session = SESSION.load(Ordering::SeqCst);
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(3));
+        if SESSION.load(Ordering::SeqCst) == session {
+            audio::cancel_recording_internal(&handle.state::<audio::AudioState>());
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
-        .manage(std::sync::Mutex::new(audio::AudioState::default()))
+    let builder = tauri::Builder::default()
+        // Must be first: a second launch focuses the running app instead of
+        // installing a second keyboard hook (double recordings, double pastes).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }))
+        .manage(audio::AudioState::default())
+        .manage(HotkeyState(Mutex::new(String::new())))
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_SHOW_ID => show_main_window(app),
             TRAY_QUIT_ID => app.exit(0),
@@ -260,179 +338,126 @@ pub fn run() {
                 show_main_window(tray.app_handle());
             }
         })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
-        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:voxdrop.db", db::get_migrations())
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    use tauri_plugin_global_shortcut::ShortcutState;
+                    // VoxDrop registers exactly one shortcut, so any match is ours.
+                    match event.state() {
+                        ShortcutState::Pressed => {
+                            let _ = app.emit("shortcut-down", ());
+                        }
+                        ShortcutState::Released => {
+                            let _ = app.emit("shortcut-up", ());
+                        }
+                    }
+                })
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             update_hotkey,
-            audio::start_recording,
             audio::stop_recording,
+            audio::cancel_recording,
             audio::get_audio_level,
-            audio::mute_system,
-            audio::unmute_system,
+            audio::set_capture_enabled,
             paste::paste_text
-        ]);
+        ])
+        .setup(|app| {
+            let tray_menu = MenuBuilder::new(app)
+                .text(TRAY_SHOW_ID, "Open VoxDrop")
+                .separator()
+                .text(TRAY_QUIT_ID, "Quit VoxDrop")
+                .build()?;
 
-    builder = builder.plugin(
-        tauri_plugin_global_shortcut::Builder::new()
-            .with_handler(|app, _shortcut, event| {
-                use tauri_plugin_global_shortcut::ShortcutState;
-                // Since Voxdrop only uses ONE global hotkey, we can trigger on any match.
-                match event.state() {
-                    ShortcutState::Pressed => {
-                        let _ = app.emit("shortcut-down", ());
-                    }
-                    ShortcutState::Released => {
-                        let _ = app.emit("shortcut-up", ());
-                    }
-                }
-            })
-            .build(),
-    );
+            TrayIconBuilder::with_id(TRAY_ID)
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .tooltip("VoxDrop")
+                .icon(app.default_window_icon().cloned().ok_or_else(|| {
+                    std::io::Error::other("Missing app icon")
+                })?)
+                .build(app)?;
 
-    builder = builder.setup(|app| {
-        let tray_menu = MenuBuilder::new(app)
-            .text(TRAY_SHOW_ID, "Open VoxDrop")
-            .separator()
-            .text(TRAY_QUIT_ID, "Quit")
-            .build()?;
-
-        TrayIconBuilder::with_id(TRAY_ID)
-            .menu(&tray_menu)
-            .show_menu_on_left_click(false)
-            .tooltip("VoxDrop")
-            .icon(app.default_window_icon().cloned().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::Other, "Missing app icon")
-            })?)
-            .build(app)?;
-
-        windows_hotkey::install(app.handle().clone());
-        update_hotkey(app.handle().clone(), DEFAULT_HOTKEY.to_string())
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-
-        // Pre-warm CPAL device enumeration cache on startup without opening a stream,
-        // so that the microphone indicator doesn't show "in use" when idle.
-        std::thread::spawn(move || {
-            use cpal::traits::{HostTrait, DeviceTrait};
-            let host = cpal::default_host();
-            if let Some(device) = host.default_input_device() {
-                if let Ok(name) = device.name() {
-                    eprintln!("[audio] Pre-warmed CPAL input device cache for: {}", name);
-                }
+            windows_hotkey::install(app.handle().clone());
+            // The persisted hotkey is applied by the frontend once its store
+            // loads; until then the default is active.
+            if let Err(err) = apply_hotkey(app.handle(), DEFAULT_HOTKEY) {
+                eprintln!("[hotkey] default hotkey unavailable: {err}");
+            } else {
+                *app.state::<HotkeyState>().0.lock().unwrap_or_else(|e| e.into_inner()) =
+                    DEFAULT_HOTKEY.to_string();
             }
-        });
 
-        if let Some(window) = app.get_webview_window("main") {
-            eprintln!(
-                "[window] main visible={:?} size={:?} pos={:?}",
-                window.is_visible(),
-                window.outer_size(),
-                window.outer_position()
-            );
-            force_present_window(&window);
-            fit_window_to_work_area(&window);
-        } else {
-            eprintln!("[window] main window was not created from config");
-        }
-
-        // Re-fit once the window has settled: a late WM_DPICHANGED rescale right
-        // after launch can push the frame back outside the work area.
-        let app_handle5 = app.handle().clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(1500));
-            if let Some(window) = app_handle5.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window("main") {
                 fit_window_to_work_area(&window);
+                force_present_window(&window);
             }
-        });
 
-        // Pre-create the dictation pill in the background (hidden) so the first
-        // hotkey press doesn't pay WebView2 window-creation latency. Deferred a
-        // couple of seconds and built on the main thread to avoid the startup
-        // window-creation failures that lazy creation in config caused on Windows.
-        let app_handle4 = app.handle().clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            if app_handle4.get_webview_window("pill").is_some() {
-                return;
-            }
-            let handle = app_handle4.clone();
-            let _ = app_handle4.run_on_main_thread(move || {
-                if handle.get_webview_window("pill").is_none() && ensure_pill_window(&handle).is_some() {
-                    eprintln!("[window] pre-created pill");
-                }
-            });
-        });
-
-        // Listen for pill-hide events from the frontend. Park the window just
-        // offscreen while KEEPING it visible: a hidden WebView2 suspends
-        // compositing, so the first frame after show() lags and the pill feels
-        // sluggish on hotkey press. A blank 320x48 offscreen webview costs
-        // effectively nothing to keep warm.
-        let app_handle = app.handle().clone();
-        app.listen("pill-hide", move |_event| {
-            if let Some(window) = app_handle.get_webview_window("pill") {
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                    x: -9999.0,
-                    y: -9999.0,
-                }));
-                let _ = window.show();
-            }
-        });
-
-        let app_handle3 = app.handle().clone();
-        app.listen("shortcut-down", move |_event| {
-            // This listener runs synchronously on whatever thread calls `emit` —
-            // including the low-level keyboard hook thread. Blocking there makes
-            // Windows silently drop the hook (hotkey dies) and lags ALL system
-            // input, so the capture work runs on its own thread.
-            let app_handle = app_handle3.clone();
+            // Re-fit once the window has settled: a late WM_DPICHANGED rescale right
+            // after launch can push the frame back outside the work area.
+            let refit = app.handle().clone();
             std::thread::spawn(move || {
-                show_pill_window(&app_handle);
-
-                // Immediate recording start and system mute in Rust
-                let audio_state = app_handle.state::<std::sync::Mutex<audio::AudioState>>();
-                let did_start = match audio::start_recording_internal(&audio_state) {
-                    Ok(did_start) => did_start,
-                    Err(err) => {
-                        eprintln!("[audio] Failed to start recording: {}", err);
-                        return;
-                    }
-                };
-                if !did_start {
-                    return;
+                std::thread::sleep(Duration::from_millis(1500));
+                if let Some(window) = refit.get_webview_window("main") {
+                    fit_window_to_work_area(&window);
                 }
-
-                let did_mute = audio::mute_system_internal().unwrap_or(false);
-
-                // Notify frontend about the mute state so it can unmute later
-                let _ = app_handle.emit("audio-muted", did_mute);
             });
-        });
 
-        // Relay history-update from pill window to all windows (JS emit only reaches Rust)
-        let app_handle2 = app.handle().clone();
-        app.listen("history-update", move |event| {
-            // Re-broadcast to all webview windows so main window receives it
-            let _ = app_handle2.emit("history-sync", event.payload());
-        });
+            // Pre-create the pill shortly after launch so the first press doesn't
+            // pay WebView2 window-creation latency. Built on the main thread to
+            // avoid the startup window-creation failures seen on Windows.
+            let pill = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(800));
+                let handle = pill.clone();
+                let _ = pill.run_on_main_thread(move || {
+                    let _ = ensure_pill_window(&handle);
+                });
+            });
 
-        Ok(())
-    });
+            // Park the pill just offscreen while KEEPING it visible: a hidden
+            // WebView2 suspends compositing, so the first frame after show()
+            // lags. A small transparent offscreen webview costs almost nothing.
+            let park = app.handle().clone();
+            app.listen("pill-hide", move |_event| {
+                if let Some(window) = park.get_webview_window("pill") {
+                    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                        x: -9999.0,
+                        y: -9999.0,
+                    }));
+                    let _ = window.show();
+                }
+            });
+
+            // These listeners run synchronously on whichever thread emitted
+            // the event, so hand the work to a fresh thread right away.
+            let down = app.handle().clone();
+            app.listen("shortcut-down", move |_event| {
+                let app = down.clone();
+                std::thread::spawn(move || on_shortcut_down(&app));
+            });
+
+            let up = app.handle().clone();
+            app.listen("shortcut-up", move |_event| on_shortcut_up(&up));
+
+            let cancel = app.handle().clone();
+            app.listen("shortcut-cancel", move |_event| {
+                SESSION.fetch_add(1, Ordering::SeqCst);
+                audio::cancel_recording_internal(&cancel.state::<audio::AudioState>());
+            });
+
+            Ok(())
+        });
 
     builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Closing the dashboard destroys it; keep running in the tray.
+            // Only the tray's Quit (an explicit exit code) ends the app.
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
+                api.prevent_exit();
+            }
+        });
 }

@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { MainView } from './components/MainView';
+import { PillView } from './components/PillView';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <MainView />
+    <PillView />
   </React.StrictMode>,
 );

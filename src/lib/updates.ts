@@ -23,7 +23,9 @@ function normalizeVersion(version: string): number[] {
   return version
     .trim()
     .replace(/^v/i, '')
-    .split(/[.-]/)
+    // "1.0.0-rc.1" compares as 1.0.0; pre-release tags never count as newer.
+    .split('-')[0]
+    .split('.')
     .map((part) => Number.parseInt(part, 10))
     .filter((part) => Number.isFinite(part));
 }
@@ -44,19 +46,35 @@ function compareVersions(current: string, latest: string): number {
   return 0;
 }
 
+/** Only ever open this repository's pages, whatever the API returns. */
+function safeReleaseUrl(url: string | undefined): string {
+  return url && url.startsWith(`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/`) ? url : RELEASES_PAGE_URL;
+}
+
 export async function checkForGitHubUpdate(): Promise<ReleaseCheckResult> {
   const currentVersion = await getInstalledVersion();
-  const response = await fetch(LATEST_RELEASE_API_URL, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`GitHub update check failed (${response.status})`);
+  let response: Response;
+  try {
+    response = await fetch(LATEST_RELEASE_API_URL, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new Error("Couldn't reach GitHub. Check your connection and try again.");
   }
 
-  const payload = await response.json() as {
+  if (response.status === 404) {
+    // GitHub answers 404 while the newest release is still a draft.
+    throw new Error('No published release found yet. Try again later.');
+  }
+  if (response.status === 403 || response.status === 429) {
+    throw new Error('GitHub is limiting update checks right now. Try again in an hour.');
+  }
+  if (!response.ok) {
+    throw new Error(`GitHub returned an error (${response.status}). Try again later.`);
+  }
+
+  const payload = (await response.json()) as {
     tag_name?: string;
     html_url?: string;
     published_at?: string;
@@ -69,7 +87,7 @@ export async function checkForGitHubUpdate(): Promise<ReleaseCheckResult> {
     currentVersion,
     latestVersion,
     hasUpdate: latestVersion ? compareVersions(currentVersion, latestVersion) > 0 : false,
-    htmlUrl: payload.html_url || RELEASES_PAGE_URL,
+    htmlUrl: safeReleaseUrl(payload.html_url),
     publishedAt: payload.published_at || null,
     notes: payload.body?.trim() || '',
   };

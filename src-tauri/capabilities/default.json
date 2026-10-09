@@ -1,13 +1,26 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main", "pill"],
+  "description": "Permissions for the dashboard and the dictation pill",
+  "windows": [
+    "main",
+    "pill"
+  ],
   "permissions": [
     "core:default",
-    "opener:default",
-    "global-shortcut:default",
-    "sql:default",
-    "os:default"
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://console.groq.com/*"
+        },
+        {
+          "url": "https://cloud.cerebras.ai/*"
+        },
+        {
+          "url": "https://github.com/Kutral/VoxDrop/*"
+        }
+      ]
+    }
   ]
 }
