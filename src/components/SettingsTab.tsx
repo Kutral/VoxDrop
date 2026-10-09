@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Check, ExternalLink, Eye, EyeOff, Loader2, RotateCcw } from 'lucide-react';
 import { DEFAULT_HOTKEY, keyFingerprint, useAppStore, type LLMProvider } from '../store';
-import { DEFAULT_MODEL, POLISH_MODELS, WHISPER_MODELS, checkKey } from '../lib/api';
+import { DEFAULT_MODEL, POLISH_MODELS, WHISPER_MODELS, checkKey, isChatModel, type ModelOption } from '../lib/api';
 import { checkForGitHubUpdate, getInstalledVersion, RELEASES_PAGE_URL, type ReleaseCheckResult } from '../lib/updates';
 import { Keys, PageHeader, Segmented, Toggle, hotkeyParts } from './ui';
 
@@ -24,15 +24,40 @@ const LANGUAGES = [
 
 const HOTKEY_PRESETS = ['Control+Super', 'Control+Shift+Space', 'Control+Alt+Space', 'Alt+Shift+D'];
 
+/** Model IDs each provider's key can use, from its last successful check. */
+type LiveModels = Partial<Record<LLMProvider, string[]>>;
+
 export function SettingsTab() {
+  const [liveModels, setLiveModels] = useState<LiveModels>({});
+  const recordModels = (provider: LLMProvider, models: string[]) => setLiveModels((m) => ({ ...m, [provider]: models }));
+
+  // Once per open: refresh the model lists for keys that already passed a test.
+  useEffect(() => {
+    const { apiKey, cerebrasApiKey, verifiedKeys } = useAppStore.getState();
+    const keys: [LLMProvider, string][] = [
+      ['groq', apiKey],
+      ['cerebras', cerebrasApiKey],
+    ];
+    for (const [provider, key] of keys) {
+      if (!key.trim() || verifiedKeys[provider] !== keyFingerprint(key)) continue;
+      void checkKey(provider, key).then((result) => {
+        if (result.ok && result.models) setLiveModels((m) => ({ ...m, [provider]: result.models }));
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div>
       <PageHeader title="Settings">Changes save as you make them.</PageHeader>
       <div className="space-y-10">
-        <KeysSection />
+        <KeysSection onModels={recordModels} />
         <ShortcutSection />
         <SpeechSection />
-        <PolishSection />
+        <PolishSection liveModels={liveModels} />
+        <Section title="Recording">
+          <InstantStartRow />
+        </Section>
         <Section title="Sounds">
           <SoundsRow />
         </Section>
@@ -74,7 +99,7 @@ function Row({ label, hint, htmlFor, children }: { label: string; hint?: ReactNo
 /*  API keys                                                           */
 /* ------------------------------------------------------------------ */
 
-function KeysSection() {
+function KeysSection({ onModels }: { onModels: (provider: LLMProvider, models: string[]) => void }) {
   const apiKey = useAppStore((s) => s.apiKey);
   const setApiKey = useAppStore((s) => s.setApiKey);
   const cerebrasKey = useAppStore((s) => s.cerebrasApiKey);
@@ -91,6 +116,7 @@ function KeysSection() {
         placeholder="gsk_…"
         consoleUrl="https://console.groq.com/keys"
         consoleLabel="Get a free key from Groq"
+        onModels={onModels}
       />
       <KeyField
         provider="cerebras"
@@ -101,6 +127,7 @@ function KeysSection() {
         consoleUrl="https://cloud.cerebras.ai/"
         consoleLabel="Get a key from Cerebras"
         note="Optional. Only used for polish when you choose Cerebras below. Speech always uses Groq."
+        onModels={onModels}
       />
     </Section>
   );
@@ -116,6 +143,7 @@ function KeyField({
   consoleLabel,
   required,
   note,
+  onModels,
 }: {
   provider: LLMProvider;
   label: string;
@@ -126,6 +154,7 @@ function KeyField({
   consoleLabel: string;
   required?: boolean;
   note?: string;
+  onModels: (provider: LLMProvider, models: string[]) => void;
 }) {
   const id = useId();
   const verified = useAppStore((s) => s.verifiedKeys[provider]);
@@ -146,6 +175,7 @@ function KeyField({
       return;
     }
     markKeyVerified(provider, key, result.ok);
+    if (result.ok && result.models) onModels(provider, result.models);
     setFailure(result.ok ? '' : result.message);
     setTesting(false);
   };
@@ -412,7 +442,7 @@ function ModelSelect({
 }: {
   id: string;
   value: string;
-  options: { id: string; label: string }[];
+  options: (ModelOption & { unavailable?: boolean })[];
   onChange: (value: string) => void;
   customPlaceholder: string;
 }) {
@@ -435,8 +465,8 @@ function ModelSelect({
         }}
       >
         {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
+          <option key={o.id} value={o.id} disabled={o.unavailable && o.id !== value}>
+            {`${o.label} — ${o.speed}${o.recommended ? ' (recommended)' : ''}${o.unavailable ? ' — not available for your key' : ''}`}
           </option>
         ))}
         <option value="__custom__">Other model…</option>
@@ -460,7 +490,8 @@ function SpeechSection() {
   const setWhisperModel = useAppStore((s) => s.setWhisperModel);
   const language = useAppStore((s) => s.language);
   const setLanguage = useAppStore((s) => s.setLanguage);
-  const hint = WHISPER_MODELS.find((m) => m.id === whisperModel)?.hint ?? 'A custom Groq speech model.';
+  const current = WHISPER_MODELS.find((m) => m.id === whisperModel);
+  const hint = current ? `${current.hint} ${current.speed}` : 'A custom Groq speech model.';
 
   return (
     <Section title="Speech recognition">
@@ -480,7 +511,17 @@ function SpeechSection() {
   );
 }
 
-function PolishSection() {
+/** The catalog, marked against the models the key can actually use. Unlisted chat models are added. */
+function withLiveModels(catalog: ModelOption[], live: string[] | undefined): (ModelOption & { unavailable?: boolean })[] {
+  if (!live) return catalog;
+  const marked = catalog.map((m) => ({ ...m, unavailable: !live.includes(m.id) }));
+  const extra = live
+    .filter((id) => isChatModel(id) && !catalog.some((m) => m.id === id))
+    .map((id) => ({ id, label: id, hint: 'Not in VoxDrop’s list.', speed: 'speed unknown' }));
+  return [...marked, ...extra];
+}
+
+function PolishSection({ liveModels }: { liveModels: LiveModels }) {
   const enabled = useAppStore((s) => s.polishEnabled);
   const setEnabled = useAppStore((s) => s.setPolishEnabled);
   const provider = useAppStore((s) => s.llamaProvider);
@@ -488,8 +529,11 @@ function PolishSection() {
   const setModel = useAppStore((s) => s.setLlamaModel);
   const setProviderAndModel = useAppStore((s) => s.setProviderAndModel);
   const cerebrasKey = useAppStore((s) => s.cerebrasApiKey);
-  const options = POLISH_MODELS[provider];
-  const hint = options.find((m) => m.id === model)?.hint ?? 'A custom model. If it fails, VoxDrop falls back to the default.';
+  const options = withLiveModels(POLISH_MODELS[provider], liveModels[provider]);
+  const current = options.find((m) => m.id === model);
+  const hint = current
+    ? `${current.hint} ${current.speed}${current.unavailable ? ' Not available for your key.' : ''}`
+    : 'A custom model. If it fails, VoxDrop falls back to the default.';
 
   return (
     <Section
@@ -526,6 +570,19 @@ function PolishSection() {
         </>
       )}
     </Section>
+  );
+}
+
+function InstantStartRow() {
+  const instantStart = useAppStore((s) => s.instantStart);
+  const setInstantStart = useAppStore((s) => s.setInstantStart);
+  return (
+    <Row
+      label="Instant start"
+      hint="Keeps the microphone open between dictations so recording starts the moment you press. Windows shows the mic-in-use icon while it's on."
+    >
+      <Toggle checked={instantStart} onChange={setInstantStart} label="Instant start" />
+    </Row>
   );
 }
 

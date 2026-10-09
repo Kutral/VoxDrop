@@ -45,7 +45,6 @@ const RETIRED_MODELS = new Set([
   'llama3.1-8b',
   'qwen/qwen3.6-27b',
   'qwen3.6-27b',
-  'allam-2-7b',
   'gemma-4-31b',
 ]);
 
@@ -74,6 +73,8 @@ interface AppState {
   llamaModel: string;
   hotkey: string;
   soundEffects: boolean;
+  /** Keep the microphone open between dictations, so recording starts on press. */
+  instantStart: boolean;
   /** Fingerprints of keys that passed "Test key". */
   verifiedKeys: Partial<Record<LLMProvider, string>>;
   snippets: Snippet[];
@@ -90,6 +91,7 @@ interface AppState {
   setLlamaModel: (model: string) => void;
   setHotkey: (hotkey: string) => void;
   setSoundEffects: (enabled: boolean) => void;
+  setInstantStart: (enabled: boolean) => void;
   markKeyVerified: (provider: LLMProvider, key: string, ok: boolean) => void;
   addSnippet: (snippet: Snippet) => void;
   updateSnippet: (id: number, snippet: Partial<Snippet>) => void;
@@ -138,6 +140,7 @@ export const useAppStore = create<AppState>()(
       llamaModel: DEFAULT_MODEL.groq,
       hotkey: DEFAULT_HOTKEY,
       soundEffects: true,
+      instantStart: false,
       verifiedKeys: {},
       snippets: [],
       history: [],
@@ -153,6 +156,7 @@ export const useAppStore = create<AppState>()(
       setLlamaModel: (llamaModel) => set({ llamaModel }),
       setHotkey: (hotkey) => set({ hotkey }),
       setSoundEffects: (soundEffects) => set({ soundEffects }),
+      setInstantStart: (instantStart) => set({ instantStart }),
       markKeyVerified: (provider, key, ok) =>
         set((state) => ({
           verifiedKeys: { ...state.verifiedKeys, [provider]: ok ? keyFingerprint(key) : undefined },
@@ -194,7 +198,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         apiKey: state.apiKey,
@@ -206,6 +210,7 @@ export const useAppStore = create<AppState>()(
         llamaModel: state.llamaModel,
         hotkey: state.hotkey,
         soundEffects: state.soundEffects,
+        instantStart: state.instantStart,
         verifiedKeys: state.verifiedKeys,
         snippets: state.snippets,
         history: state.history,
@@ -231,10 +236,21 @@ export const useAppStore = create<AppState>()(
           delete state.totalWordsAllTime;
           delete state.totalDurationAllTime;
         }
+        // gpt-oss-20b was the old default; users who never chose it get the faster model.
+        if (version < 3 && state.llamaProvider !== 'cerebras' && (!state.llamaModel || state.llamaModel === 'openai/gpt-oss-20b')) {
+          state.llamaModel = DEFAULT_MODEL.groq;
+        }
         const provider: LLMProvider = state.llamaProvider === 'cerebras' ? 'cerebras' : 'groq';
         state.llamaProvider = provider;
         if (!state.llamaModel || RETIRED_MODELS.has(state.llamaModel)) state.llamaModel = DEFAULT_MODEL[provider];
         return state as AppState;
+      },
+      // migrate only runs when the stored version changes, so a retired model
+      // saved under the current version is caught here. Mutate in place: calling
+      // setState during rehydration stalls startup on the splash screen.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (RETIRED_MODELS.has(state.llamaModel)) state.llamaModel = DEFAULT_MODEL[state.llamaProvider];
       },
     },
   ),

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { AlertTriangle, Check, Info } from 'lucide-react';
-import { useAppStore, whenHydrated } from '../store';
+import { DEFAULT_HOTKEY, useAppStore, whenHydrated } from '../store';
 import { DictationError, polish, transcribe, warmUp } from '../lib/api';
 import { countWords, expandSnippets } from '../lib/textCleanup';
 import { playErrorEarcon, playStartEarcon, playSuccessEarcon, primeAudio } from '../lib/sounds';
 
-type Phase = 'idle' | 'listening' | 'transcribing' | 'polishing' | 'pasting' | 'done' | 'error' | 'notice';
+type Phase = 'idle' | 'starting' | 'listening' | 'transcribing' | 'polishing' | 'pasting' | 'done' | 'error' | 'notice';
 
 interface View {
   phase: Phase;
@@ -42,6 +42,15 @@ const hasGroqKey = () => !!useAppStore.getState().apiKey.trim();
 function setCapture(enabled: boolean) {
   invoke('set_capture_enabled', { enabled }).catch(() => {});
 }
+
+/** "Instant start" keeps the mic stream open; only worth it with a key. */
+function syncKeepMicReady() {
+  const { instantStart, apiKey } = useAppStore.getState();
+  invoke('set_keep_mic_ready', { enabled: instantStart && !!apiKey.trim() }).catch(() => {});
+}
+
+/** Pressed, and the take is ours to stop or cancel. */
+const isCapturing = (phase: Phase) => phase === 'starting' || phase === 'listening';
 
 export function PillView() {
   const [view, setView] = useState<View>({ phase: 'idle' });
@@ -92,10 +101,18 @@ export function PillView() {
     const pill = api.current;
     primeAudio();
 
-    whenHydrated().then(() => setCapture(hasGroqKey()));
+    whenHydrated().then(() => {
+      setCapture(hasGroqKey());
+      syncKeepMicReady();
+      // The pill lives for the whole session; the dashboard may never open
+      // (closed to the tray), so the saved hotkey is applied from here too.
+      // Errors are the dashboard's to show.
+      invoke('update_hotkey', { newHotkey: useAppStore.getState().hotkey || DEFAULT_HOTKEY }).catch(() => {});
+    });
     // Capture follows the key: no key, no mic and no media pause on press.
     const unsubscribe = useAppStore.subscribe((state, prev) => {
       if (state.apiKey !== prev.apiKey && !STAGES.includes(phaseRef.current)) setCapture(!!state.apiKey.trim());
+      if (state.apiKey !== prev.apiKey || state.instantStart !== prev.instantStart) syncKeepMicReady();
     });
 
     const onPress = () => {
@@ -106,22 +123,31 @@ export function PillView() {
         pill.flash('notice', 'Add your Groq key to dictate', 'Open VoxDrop from the tray, then Settings', 4500);
         return;
       }
+      // Rust may already have reported the mic live (instant start).
+      if (phaseRef.current === 'listening') return;
       startedAt.current = Date.now();
-      pill.show({ phase: 'listening' });
-      if (state.soundEffects) playStartEarcon();
+      pill.show({ phase: 'starting' });
       // Open the connection while the user talks, not after.
       warmUp('groq', state.apiKey);
       if (state.polishEnabled && state.llamaProvider === 'cerebras') warmUp('cerebras', state.cerebrasApiKey);
     };
 
+    // The mic is live: only now is it safe to talk, so only now the tone.
+    const onStarted = () => {
+      if (STAGES.includes(phaseRef.current) || phaseRef.current === 'listening') return;
+      startedAt.current = Date.now();
+      pill.show({ phase: 'listening' });
+      if (useAppStore.getState().soundEffects) playStartEarcon();
+    };
+
     const onCancel = () => {
-      if (phaseRef.current !== 'listening') return;
+      if (!isCapturing(phaseRef.current)) return;
       pill.clearTimers();
       pill.hideAfter(0);
     };
 
     const onRelease = async () => {
-      if (phaseRef.current !== 'listening') return;
+      if (!isCapturing(phaseRef.current)) return;
       const seconds = Math.max((Date.now() - startedAt.current) / 1000, 0.5);
       pill.show({ phase: 'transcribing' });
       setCapture(false);
@@ -195,6 +221,7 @@ export function PillView() {
 
     const subscriptions = [
       listen('shortcut-down', onPress),
+      listen('recording-started', onStarted),
       listen('shortcut-up', () => void onRelease()),
       listen('shortcut-cancel', onCancel),
       listen('recording-error', onMicError),
@@ -255,6 +282,8 @@ export function PillView() {
   const statusText =
     view.phase === 'listening'
       ? 'Listening'
+      : view.phase === 'starting'
+        ? 'Starting microphone'
       : stageIndex >= 0
         ? `${STAGE_LABEL[view.phase]}…`
         : [view.title, view.detail].filter(Boolean).join('. ');
@@ -266,7 +295,7 @@ export function PillView() {
       </div>
 
       <div className={`pill ${shown ? 'pill-in' : 'pill-out'}`} data-phase={view.phase} aria-hidden="true">
-        {view.phase === 'listening' && (
+        {isCapturing(view.phase) && (
           <>
             <span className="pill-rec" />
             <div ref={barsRef} className="pill-meter">

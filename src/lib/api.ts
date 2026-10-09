@@ -17,22 +17,63 @@ const CEREBRAS_BASE = 'https://api.cerebras.ai/v1';
 
 export const DEFAULT_WHISPER_MODEL = 'whisper-large-v3-turbo';
 export const DEFAULT_MODEL: Record<LLMProvider, string> = {
-  groq: 'openai/gpt-oss-20b',
+  groq: 'qwen/qwen3.8-27b',
   cerebras: 'gpt-oss-120b',
 };
 
-export const WHISPER_MODELS = [
-  { id: 'whisper-large-v3-turbo', label: 'Whisper Turbo', hint: 'Fastest. Right for everyday dictation.' },
-  { id: 'whisper-large-v3', label: 'Whisper Large v3', hint: 'Slower, better with accents, noise and names.' },
+export interface ModelOption {
+  id: string;
+  label: string;
+  hint: string;
+  /** Short speed note shown in settings, e.g. '~0.2 s · 520 tok/s'. */
+  speed: string;
+  recommended?: boolean;
+}
+
+export const WHISPER_MODELS: ModelOption[] = [
+  { id: 'whisper-large-v3-turbo', label: 'Whisper Turbo', hint: 'Fastest. Right for everyday dictation.', speed: '0.6 s per 20 s of audio' },
+  { id: 'whisper-large-v3', label: 'Whisper Large v3', hint: 'Slower, better with accents, noise and names.', speed: '0.7 s per 20 s of audio' },
 ];
 
-export const POLISH_MODELS: Record<LLMProvider, { id: string; label: string; hint: string }[]> = {
+export const POLISH_MODELS: Record<LLMProvider, ModelOption[]> = {
   groq: [
-    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', hint: 'Fast and accurate. Recommended.' },
-    { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', hint: 'Larger model, a little slower.' },
+    {
+      id: 'qwen/qwen3.8-27b',
+      label: 'Qwen 3.8 27B',
+      hint: 'Fastest clean-up with the best formatting.',
+      speed: '~0.2 s · 520 tok/s',
+      recommended: true,
+    },
+    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', hint: 'Fast, but most of its work is hidden reasoning. Weaker formatting.', speed: '~0.6 s · 950 tok/s' },
+    { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', hint: 'Larger model, a little slower.', speed: '~0.8 s · 480 tok/s' },
+    {
+      id: 'allam-2-7b',
+      label: 'ALLaM 2 7B',
+      hint: 'Fastest raw speed but weak clean-up: keeps fillers. Built for Arabic.',
+      speed: '~0.15 s · 1400 tok/s',
+    },
   ],
-  cerebras: [{ id: 'gpt-oss-120b', label: 'GPT-OSS 120B', hint: 'Very fast on Cerebras.' }],
+  cerebras: [
+    {
+      id: 'gpt-oss-120b',
+      label: 'GPT-OSS 120B',
+      hint: 'Very fast on Cerebras.',
+      speed: '~3000 tok/s (published)',
+      recommended: true,
+    },
+    {
+      id: 'qwen-3.8-27b',
+      label: 'Qwen 3.8 27B',
+      hint: 'Fast, with its reasoning turned off for clean-up.',
+      speed: '~1,850 tok/s (published)',
+    },
+  ],
 };
+
+/** Speech and chat listings mix in models that can't clean up text. */
+export function isChatModel(id: string): boolean {
+  return !/whisper|guard|safeguard|orpheus|tts|playai|distil/i.test(id);
+}
 
 /** An error with a short message that fits the pill, plus a hint. */
 export class DictationError extends Error {
@@ -48,6 +89,9 @@ export class DictationError extends Error {
 function describeHttp(service: string, status: number): DictationError {
   if (status === 401 || status === 403) {
     return new DictationError(`${service} key rejected`, 'Check it in VoxDrop settings', status);
+  }
+  if (status === 402) {
+    return new DictationError(`${service} account needs credit`, 'Add billing, or switch provider in settings', status);
   }
   if (status === 404) {
     return new DictationError('Model not available', 'Pick another model in settings', status);
@@ -158,8 +202,12 @@ Reply with the cleaned text only.
 <transcript>what's the weather in paris today</transcript> → What's the weather in Paris today?
 <transcript>um so we should ship it on friday period</transcript> → We should ship it on Friday.`;
 
-/** gpt-oss models accept reasoning_effort; others may reject the field. */
-const supportsReasoningEffort = (model: string) => /gpt-oss/i.test(model);
+/** Reasoning controls differ by model: gpt-oss takes an effort level, Qwen runs with reasoning off. */
+function reasoningFields(model: string): Record<string, string> {
+  if (/gpt-oss/i.test(model)) return { reasoning_effort: 'low' };
+  if (/qwen/i.test(model)) return { reasoning_effort: 'none' };
+  return {};
+}
 
 /** Roughly 2 tokens per word for the rewrite, plus room for brief reasoning. */
 const tokenBudget = (text: string) => Math.min(Math.max(countWords(text) * 2 + 512, 768), 8192);
@@ -179,7 +227,7 @@ async function polishOnce(text: string, provider: LLMProvider, key: string, mode
     temperature: 0,
     max_completion_tokens: tokenBudget(text),
   };
-  if (supportsReasoningEffort(model)) body.reasoning_effort = 'low';
+  Object.assign(body, reasoningFields(model));
 
   lastContact[base] = Date.now();
   const response = await request(
@@ -213,6 +261,15 @@ export interface PolishResult {
 }
 
 /**
+ * Keys a provider rejected recently (401/402/403), with when to try again.
+ * Keyed by the key itself, so pasting a new key takes effect at once.
+ */
+const rejectedUntil = new Map<string, number>();
+const REJECTED_COOLDOWN_MS = 10 * 60_000;
+const isUsable = (provider: LLMProvider, key: string) =>
+  (rejectedUntil.get(`${provider}:${key.trim()}`) ?? 0) <= Date.now();
+
+/**
  * Clean a transcript. Never throws: any failure falls back to local cleanup
  * so a dictation is never lost to a polish problem.
  */
@@ -224,12 +281,14 @@ export async function polish(raw: string, settings: PolishSettings): Promise<Pol
 
   const key = settings.provider === 'cerebras' ? settings.cerebrasKey : settings.groqKey;
   const attempts: [LLMProvider, string, string][] = [];
-  if (key.trim()) attempts.push([settings.provider, key, settings.model || DEFAULT_MODEL[settings.provider]]);
-  // A retired or mistyped model shouldn't cost every dictation its polish.
-  if (key.trim() && settings.model && settings.model !== DEFAULT_MODEL[settings.provider]) {
-    attempts.push([settings.provider, key, DEFAULT_MODEL[settings.provider]]);
+  if (key.trim() && isUsable(settings.provider, key)) {
+    attempts.push([settings.provider, key, settings.model || DEFAULT_MODEL[settings.provider]]);
+    // A retired or mistyped model shouldn't cost every dictation its polish.
+    if (settings.model && settings.model !== DEFAULT_MODEL[settings.provider]) {
+      attempts.push([settings.provider, key, DEFAULT_MODEL[settings.provider]]);
+    }
   }
-  if (settings.provider === 'cerebras' && settings.groqKey.trim()) {
+  if (settings.provider === 'cerebras' && settings.groqKey.trim() && isUsable('groq', settings.groqKey)) {
     attempts.push(['groq', settings.groqKey, DEFAULT_MODEL.groq]);
   }
 
@@ -244,6 +303,11 @@ export async function polish(raw: string, settings: PolishSettings): Promise<Pol
       return cleaned ? { text: cleaned, method: 'ai' } : basic;
     } catch (err) {
       console.warn(`[polish] ${provider}/${model} failed:`, err instanceof Error ? err.message : err);
+      // A bad key or an unpaid account won't fix itself between dictations: stop
+      // paying a failed round trip to that provider for a while.
+      if (err instanceof DictationError && [401, 402, 403].includes(err.status ?? 0)) {
+        rejectedUntil.set(`${provider}:${attemptKey.trim()}`, Date.now() + REJECTED_COOLDOWN_MS);
+      }
       if (!(err instanceof DictationError && err.status === 404)) skipProvider = provider;
     }
   }

@@ -246,6 +246,15 @@ html.pill-window body {
   box-shadow: 0 0 0 3px rgb(var(--pill-signal) / 0.18);
 }
 
+/* Mic still opening: hollow dot, muted bars. Turns solid when it's live. */
+.pill[data-phase='starting'] .pill-rec {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px rgb(var(--pill-signal));
+}
+.pill[data-phase='starting'] .pill-meter > span {
+  opacity: 0.35;
+}
+
 .pill-meter {
   display: flex;
   height: 22px;

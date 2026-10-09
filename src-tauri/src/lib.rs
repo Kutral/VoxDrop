@@ -182,6 +182,7 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
         Ok(window) => {
             // A status overlay: clicks go to whatever is underneath.
             let _ = window.set_ignore_cursor_events(true);
+            park_pill(&window);
             Some(window)
         }
         Err(err) => {
@@ -189,6 +190,13 @@ fn ensure_pill_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<ta
             None
         }
     }
+}
+
+/// Keep the pill visible but offscreen between takes: a hidden WebView2
+/// suspends compositing, so the first frame after `show()` lags.
+fn park_pill<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x: -9999.0, y: -9999.0 }));
+    let _ = window.show();
 }
 
 /// Bottom-centre of the work area on the monitor under the mouse, so the pill
@@ -277,25 +285,28 @@ fn update_hotkey(
 
 fn on_shortcut_down<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
-    let state = app.state::<audio::AudioState>();
 
-    // Capture first: every millisecond before the stream starts is a lost
-    // syllable. The pill renders its own "listening" state from the event.
-    let mut started = false;
-    if audio::capture_enabled(&state) {
-        match audio::start_recording_internal(&state) {
-            Ok(did_start) => started = did_start,
-            Err(err) => {
-                eprintln!("[audio] Failed to start recording: {err}");
-                let _ = app.emit("recording-error", err);
-            }
-        }
-    }
-
+    // Pill first: it costs a few ms, while opening the mic can take most of
+    // a second on some laptops. The pill shows "starting" until the
+    // `recording-started` event says the mic is live.
     show_pill_window(app);
 
-    if started && SESSION.load(Ordering::SeqCst) == session {
-        audio::mute_for_dictation(&state);
+    let state = app.state::<audio::AudioState>();
+    if !audio::capture_enabled(&state) {
+        return;
+    }
+    match audio::start_recording_internal(&state) {
+        Ok(true) => {
+            let _ = app.emit("recording-started", ());
+            if SESSION.load(Ordering::SeqCst) == session {
+                audio::mute_for_dictation(&state);
+            }
+        }
+        Ok(false) => {}
+        Err(err) => {
+            eprintln!("[audio] Failed to start recording: {err}");
+            let _ = app.emit("recording-error", err);
+        }
     }
 }
 
@@ -361,6 +372,7 @@ pub fn run() {
             audio::cancel_recording,
             audio::get_audio_level,
             audio::set_capture_enabled,
+            audio::set_keep_mic_ready,
             paste::paste_text
         ])
         .setup(|app| {
@@ -416,17 +428,10 @@ pub fn run() {
                 });
             });
 
-            // Park the pill just offscreen while KEEPING it visible: a hidden
-            // WebView2 suspends compositing, so the first frame after show()
-            // lags. A small transparent offscreen webview costs almost nothing.
             let park = app.handle().clone();
             app.listen("pill-hide", move |_event| {
                 if let Some(window) = park.get_webview_window("pill") {
-                    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                        x: -9999.0,
-                        y: -9999.0,
-                    }));
-                    let _ = window.show();
+                    park_pill(&window);
                 }
             });
 

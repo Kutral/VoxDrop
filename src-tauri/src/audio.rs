@@ -41,6 +41,10 @@ pub struct AudioState {
     /// The frontend turns capture off while there is no API key, so a press
     /// doesn't open the mic or pause media for nothing.
     capture_enabled: AtomicBool,
+    /// "Instant start": keep the stream open between takes. Opening a
+    /// WASAPI capture stream costs 0.4-1 s on some laptops, but Windows shows
+    /// the mic-in-use icon for as long as one exists, so this is opt-in.
+    keep_warm: AtomicBool,
 }
 
 impl Default for AudioState {
@@ -54,6 +58,7 @@ impl Default for AudioState {
             stream_failed: Arc::new(AtomicBool::new(false)),
             did_mute: Mutex::new(false),
             capture_enabled: AtomicBool::new(true),
+            keep_warm: AtomicBool::new(false),
         }
     }
 }
@@ -212,8 +217,9 @@ where
         .map_err(|e| e.to_string())
 }
 
-/// Open the default input device and start capturing into `wav_data`.
-fn open_and_start(state: &AudioState) -> Result<(), String> {
+/// Open the default input device and start a stream that writes into
+/// `wav_data` whenever `is_recording` is set.
+fn open_stream(state: &AudioState) -> Result<StreamWrapper, String> {
     let host = cpal::default_host();
     let device = host
         .default_input_device()
@@ -226,12 +232,6 @@ fn open_and_start(state: &AudioState) -> Result<(), String> {
     let config: cpal::StreamConfig = supported.into();
     let max_samples = sample_rate as usize * channels as usize * MAX_RECORDING_SECONDS;
 
-    {
-        let mut buffer = lock(&state.wav_data);
-        buffer.clear();
-        // About 30 s up front so the audio thread rarely reallocates.
-        buffer.reserve(sample_rate as usize * channels as usize * 30);
-    }
     *lock(&state.spec) = Some(WavSpec {
         channels,
         sample_rate,
@@ -250,12 +250,19 @@ fn open_and_start(state: &AudioState) -> Result<(), String> {
     };
 
     state.stream_failed.store(false, Ordering::SeqCst);
-    state.is_recording.store(true, Ordering::SeqCst);
-    if let Err(err) = stream.play() {
-        state.is_recording.store(false, Ordering::SeqCst);
-        return Err(err.to_string());
+    stream.play().map_err(|e| e.to_string())?;
+    Ok(StreamWrapper(stream))
+}
+
+/// Make sure a live stream sits in `slot`, reusing a warm one when it is
+/// still healthy. Building one is the slow part of starting a take.
+fn ensure_stream(state: &AudioState, slot: &mut Option<StreamWrapper>) -> Result<(), String> {
+    if slot.is_some() && !state.stream_failed.load(Ordering::SeqCst) {
+        return Ok(());
     }
-    *lock(&state.stream) = Some(StreamWrapper(stream));
+    // A failed stream (device unplugged, sleep/resume) is rebuilt.
+    slot.take();
+    *slot = Some(open_stream(state)?);
     Ok(())
 }
 
@@ -265,18 +272,48 @@ pub fn capture_enabled(state: &AudioState) -> bool {
 
 /// Start a recording. Returns `Ok(false)` if one is already running.
 ///
-/// The stream is built fresh for every recording and dropped afterwards:
-/// Windows shows the microphone "in use" indicator for as long as a capture
-/// stream exists, even a paused one.
+/// Without "Instant start" the stream is built for every recording and
+/// dropped afterwards: Windows shows the microphone "in use" indicator for as
+/// long as a capture stream exists, even a paused one.
 pub fn start_recording_internal(state: &AudioState) -> Result<bool, String> {
+    // Held for the whole start, so a release that lands while the device is
+    // still opening waits here and then stops this take instead of racing it.
+    let mut slot = lock(&state.stream);
     if state.is_recording.load(Ordering::SeqCst) {
         return Ok(false);
     }
-    // Drop any stream a previous session left behind before opening a new one.
-    lock(&state.stream).take();
     state.rms_level.store(0, Ordering::Relaxed);
-    open_and_start(state)?;
+    {
+        let mut buffer = lock(&state.wav_data);
+        buffer.clear();
+        // About 30 s up front so the audio thread rarely reallocates.
+        if let Some(spec) = *lock(&state.spec) {
+            buffer.reserve(spec.sample_rate as usize * spec.channels as usize * 30);
+        }
+    }
+    ensure_stream(state, &mut slot)?;
+    state.is_recording.store(true, Ordering::SeqCst);
     Ok(true)
+}
+
+/// Turn "Instant start" on or off. Opens or closes the standing stream off
+/// the caller's thread, since opening can take most of a second.
+#[tauri::command]
+pub fn set_keep_mic_ready(app: tauri::AppHandle, enabled: bool) {
+    use tauri::Manager;
+    app.state::<AudioState>().keep_warm.store(enabled, Ordering::SeqCst);
+    std::thread::spawn(move || {
+        let state = app.state::<AudioState>();
+        let mut slot = lock(&state.stream);
+        if state.is_recording.load(Ordering::SeqCst) {
+            return; // the take's own stop applies the new setting
+        }
+        if !state.keep_warm.load(Ordering::SeqCst) {
+            slot.take();
+        } else if let Err(err) = ensure_stream(&state, &mut slot) {
+            eprintln!("[audio] Could not keep the microphone ready: {err}");
+        }
+    });
 }
 
 /// Pause media if it is playing. Must run after `start_recording_internal`.
@@ -306,10 +343,16 @@ fn restore_media(state: &AudioState) {
 /// Stop the active recording and return its samples plus format, or `None`
 /// when nothing was recording (so stale audio can never be returned).
 fn finish_recording(state: &AudioState) -> Option<(Vec<i16>, WavSpec)> {
+    // Lock before flipping the flag: a start still opening the device holds
+    // this lock, so the release waits for it rather than missing it.
+    let mut slot = lock(&state.stream);
     let was_recording = state.is_recording.swap(false, Ordering::SeqCst);
     // Dropping the stream closes the capture endpoint and clears the mic
-    // indicator.
-    lock(&state.stream).take();
+    // indicator. With "Instant start" it stays open for the next take.
+    if !state.keep_warm.load(Ordering::SeqCst) || state.stream_failed.load(Ordering::SeqCst) {
+        slot.take();
+    }
+    drop(slot);
     state.rms_level.store(0, Ordering::Relaxed);
     restore_media(state);
 
