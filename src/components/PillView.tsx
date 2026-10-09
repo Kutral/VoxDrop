@@ -1,435 +1,342 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, emit } from '@tauri-apps/api/event';
-import { useAppStore } from '../store';
-import { transcribeAudio } from '../lib/groq';
-import { cleanupTextWithProvider } from '../lib/inference';
-import { playStartEarcon, playSuccessEarcon } from '../lib/sounds';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { emit, listen } from '@tauri-apps/api/event';
+import { AlertTriangle, Check, Info } from 'lucide-react';
+import { DEFAULT_HOTKEY, useAppStore, whenHydrated } from '../store';
+import { DictationError, polish, transcribe, warmUp } from '../lib/api';
+import { countWords, expandSnippets } from '../lib/textCleanup';
+import { playErrorEarcon, playStartEarcon, playSuccessEarcon, primeAudio } from '../lib/sounds';
 
-type PillState = 'hidden' | 'listening' | 'processing' | 'done' | 'error';
+type Phase = 'idle' | 'starting' | 'listening' | 'transcribing' | 'polishing' | 'pasting' | 'done' | 'error' | 'notice';
 
-const BAR_COUNT = 14;
-const POLL_INTERVAL = 33;
-const IDLE_BAR_HEIGHT = 4;
-const MAX_BAR_HEIGHT = 22;
-const NOISE_FLOOR = 0.0025;
-const MIN_DYNAMIC_PEAK = 0.018;
-const SPEECH_GAIN = 3.4;
-const PRESENCE_FLOOR = 0.16;
-
-function hidePillWindow() {
-  emit('pill-hide').catch(() => {});
+interface View {
+  phase: Phase;
+  title?: string;
+  detail?: string;
 }
 
-function describeProcessingError(err: unknown): string {
-  if (!(err instanceof Error)) {
-    return 'Processing failed';
-  }
+const BAR_COUNT = 18;
+const EXIT_MS = 170;
+const STAGES: Phase[] = ['transcribing', 'polishing', 'pasting'];
+const STAGE_LABEL: Partial<Record<Phase, string>> = {
+  transcribing: 'Transcribing',
+  polishing: 'Polishing',
+  pasting: 'Pasting',
+};
 
-  const message = err.message.trim();
-  if (!message) {
-    return 'Processing failed';
-  }
+const formatElapsed = (ms: number) => {
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
 
-  if (message.includes('429')) return 'Rate limit hit';
-  if (/401|invalid api key|unauthorized/i.test(message)) return 'Invalid API key';
-  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'Network error';
-
-  return message.length > 56 ? `${message.slice(0, 53)}...` : message;
+/** Turn any failure (DictationError, Rust error string, …) into pill copy. */
+function describe(err: unknown): { title: string; detail: string } {
+  if (err instanceof DictationError) return { title: err.message, detail: err.hint };
+  const message = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
+  if (/microphone/i.test(message)) return { title: 'Microphone unavailable', detail: 'Check it is connected' };
+  return { title: 'Something failed', detail: 'Hold the shortcut and try again' };
 }
+
+const hasGroqKey = () => !!useAppStore.getState().apiKey.trim();
+
+function setCapture(enabled: boolean) {
+  invoke('set_capture_enabled', { enabled }).catch(() => {});
+}
+
+/** "Instant start" keeps the mic stream open; only worth it with a key. */
+function syncKeepMicReady() {
+  const { instantStart, apiKey } = useAppStore.getState();
+  invoke('set_keep_mic_ready', { enabled: instantStart && !!apiKey.trim() }).catch(() => {});
+}
+
+/** Pressed, and the take is ours to stop or cancel. */
+const isCapturing = (phase: Phase) => phase === 'starting' || phase === 'listening';
 
 export function PillView() {
-  const [pillState, setPillState] = useState<PillState>('hidden');
-  const [statusMsg, setStatusMsg] = useState('');
-  const [barHeights, setBarHeights] = useState<number[]>(
-    new Array(BAR_COUNT).fill(IDLE_BAR_HEIGHT)
-  );
-  const [isVisible, setIsVisible] = useState(false);
+  const [view, setView] = useState<View>({ phase: 'idle' });
+  const [shown, setShown] = useState(false);
 
-  const pillStateRef = useRef<PillState>(pillState);
-  pillStateRef.current = pillState;
+  const phaseRef = useRef<Phase>('idle');
+  const startedAt = useRef(0);
+  const timers = useRef<number[]>([]);
+  const barsRef = useRef<HTMLDivElement>(null);
+  const clockRef = useRef<HTMLSpanElement>(null);
 
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const barHistoryRef = useRef<number[]>(new Array(BAR_COUNT).fill(0));
-  const dynamicPeakRef = useRef(MIN_DYNAMIC_PEAK);
-  const didMuteRef = useRef(false);
-  const muteEventSeenRef = useRef(false);
-  const cleanupOnMuteEventRef = useRef(false);
-
-  // Track text changes for CSS animation
-  const [textKey, setTextKey] = useState(0);
-
-  const resetWaveform = useCallback(() => {
-    if (pollTimeoutRef.current) {
-      clearTimeout(pollTimeoutRef.current);
-      pollTimeoutRef.current = null;
-    }
-
-    barHistoryRef.current = new Array(BAR_COUNT).fill(0);
-    dynamicPeakRef.current = MIN_DYNAMIC_PEAK;
-    setBarHeights(new Array(BAR_COUNT).fill(IDLE_BAR_HEIGHT));
-  }, []);
-
-  const updateBars = useCallback((rawLevel: number) => {
-    const safeLevel = Number.isFinite(rawLevel) ? Math.max(0, rawLevel) : 0;
-    const boostedLevel = safeLevel * SPEECH_GAIN;
-
-    dynamicPeakRef.current = Math.max(
-      MIN_DYNAMIC_PEAK,
-      boostedLevel,
-      dynamicPeakRef.current * 0.975
-    );
-
-    const normalizedBase =
-      boostedLevel <= NOISE_FLOOR
-        ? 0
-        : Math.min(
-            1,
-            Math.pow(
-              (boostedLevel - NOISE_FLOOR) /
-                Math.max(dynamicPeakRef.current - NOISE_FLOOR, 0.001),
-              0.58
-            )
+  // Everything below runs from event callbacks, so it reads refs and
+  // getState() rather than render-time values.
+  const api = useRef({
+    clearTimers() {
+      timers.current.forEach((id) => window.clearTimeout(id));
+      timers.current = [];
+    },
+    show(next: View) {
+      api.current.clearTimers();
+      phaseRef.current = next.phase;
+      setView(next);
+      setShown(true);
+    },
+    hideAfter(ms: number) {
+      timers.current.push(
+        window.setTimeout(() => {
+          setShown(false);
+          timers.current.push(
+            window.setTimeout(() => {
+              phaseRef.current = 'idle';
+              setView({ phase: 'idle' });
+              emit('pill-hide').catch(() => {});
+            }, EXIT_MS),
           );
-
-    const normalized =
-      normalizedBase > 0
-        ? Math.min(1, PRESENCE_FLOOR + normalizedBase * (1 - PRESENCE_FLOOR))
-        : 0;
-
-    const nextHistory = [...barHistoryRef.current.slice(1), normalized];
-    barHistoryRef.current = nextHistory;
-
-    setBarHeights(
-      nextHistory.map((sample, index) => {
-        const previous = nextHistory[index - 1] ?? sample;
-        const upcoming = nextHistory[index + 1] ?? sample;
-        const blendedSample = sample * 0.62 + previous * 0.19 + upcoming * 0.19;
-        const easedSample = Math.pow(blendedSample, 0.92);
-        return IDLE_BAR_HEIGHT + easedSample * (MAX_BAR_HEIGHT - IDLE_BAR_HEIGHT);
-      })
-    );
-  }, []);
+        }, ms),
+      );
+    },
+    flash(phase: 'error' | 'notice' | 'done', title: string, detail: string, ms: number) {
+      api.current.show({ phase, title, detail });
+      api.current.hideAfter(ms);
+      const { soundEffects } = useAppStore.getState();
+      if (soundEffects) (phase === 'done' ? playSuccessEarcon : playErrorEarcon)();
+    },
+  });
 
   useEffect(() => {
-    if (pillState !== 'listening') {
-      resetWaveform();
-      return undefined;
-    }
+    const pill = api.current;
+    primeAudio();
 
-    let cancelled = false;
+    whenHydrated().then(() => {
+      setCapture(hasGroqKey());
+      syncKeepMicReady();
+      // The pill lives for the whole session; the dashboard may never open
+      // (closed to the tray), so the saved hotkey is applied from here too.
+      // Errors are the dashboard's to show.
+      invoke('update_hotkey', { newHotkey: useAppStore.getState().hotkey || DEFAULT_HOTKEY }).catch(() => {});
+    });
+    // Capture follows the key: no key, no mic and no media pause on press.
+    const unsubscribe = useAppStore.subscribe((state, prev) => {
+      if (state.apiKey !== prev.apiKey && !STAGES.includes(phaseRef.current)) setCapture(!!state.apiKey.trim());
+      if (state.apiKey !== prev.apiKey || state.instantStart !== prev.instantStart) syncKeepMicReady();
+    });
 
-    const pollAudioLevel = async () => {
+    const onPress = () => {
+      // Rust ignores presses while we work; the pill keeps showing progress.
+      if (STAGES.includes(phaseRef.current)) return;
+      const state = useAppStore.getState();
+      if (!state.apiKey.trim()) {
+        pill.flash('notice', 'Add your Groq key to dictate', 'Open VoxDrop from the tray, then Settings', 4500);
+        return;
+      }
+      // Rust may already have reported the mic live (instant start).
+      if (phaseRef.current === 'listening') return;
+      startedAt.current = Date.now();
+      pill.show({ phase: 'starting' });
+      // Open the connection while the user talks, not after.
+      warmUp('groq', state.apiKey);
+      if (state.polishEnabled && state.llamaProvider === 'cerebras') warmUp('cerebras', state.cerebrasApiKey);
+    };
+
+    // The mic is live: only now is it safe to talk, so only now the tone.
+    const onStarted = () => {
+      if (STAGES.includes(phaseRef.current) || phaseRef.current === 'listening') return;
+      startedAt.current = Date.now();
+      pill.show({ phase: 'listening' });
+      if (useAppStore.getState().soundEffects) playStartEarcon();
+    };
+
+    const onCancel = () => {
+      if (!isCapturing(phaseRef.current)) return;
+      pill.clearTimers();
+      pill.hideAfter(0);
+    };
+
+    const onRelease = async () => {
+      if (!isCapturing(phaseRef.current)) return;
+      const seconds = Math.max((Date.now() - startedAt.current) / 1000, 0.5);
+      pill.show({ phase: 'transcribing' });
+      setCapture(false);
+
       try {
-        const level = await invoke<number>('get_audio_level');
-        if (!cancelled) {
-          updateBars(level);
+        const wav = await invoke<ArrayBuffer>('stop_recording');
+        if (!wav || wav.byteLength === 0) {
+          pill.flash('notice', "Didn't catch that", 'Hold the shortcut while you speak', 1600);
+          return;
         }
-      } catch {
-        if (!cancelled) {
-          updateBars(0);
+
+        // The dashboard may have changed settings or snippets since we last read.
+        await useAppStore.persist.rehydrate();
+        const s = useAppStore.getState();
+        const raw = await transcribe(wav, s.apiKey, {
+          model: s.whisperModel,
+          language: s.language,
+          vocabulary: s.snippets.map((snippet) => snippet.trigger_phrase),
+        });
+        if (!raw) {
+          pill.flash('notice', "Didn't catch that", 'Speak a little closer to the mic', 1600);
+          return;
         }
+
+        if (s.polishEnabled && countWords(raw) > 3) pill.show({ phase: 'polishing' });
+        const polished = await polish(raw, {
+          enabled: s.polishEnabled,
+          provider: s.llamaProvider,
+          model: s.llamaModel,
+          groqKey: s.apiKey,
+          cerebrasKey: s.cerebrasApiKey,
+        });
+        const text = expandSnippets(polished.text, s.snippets);
+
+        pill.show({ phase: 'pasting' });
+        let pasteFailed = false;
+        try {
+          await invoke('paste_text', { text });
+        } catch (err) {
+          console.error('[pill] paste failed:', err);
+          pasteFailed = true;
+        }
+
+        // Save after pasting: the paste is what the user is waiting for.
+        useAppStore.getState().addHistoryItem({
+          id: Date.now(),
+          transcript: text,
+          duration_seconds: seconds,
+          created_at: new Date().toISOString(),
+          method: polished.method,
+        });
+        emit('history-sync').catch(() => {});
+
+        if (pasteFailed) {
+          pill.flash('error', "Couldn't paste", 'Your text is saved in History', 4500);
+        } else {
+          pill.flash('done', 'Pasted', text.length > 52 ? `${text.slice(0, 50)}…` : text, 1500);
+        }
+      } catch (err) {
+        console.error('[pill] dictation failed:', err);
+        const { title, detail } = describe(err);
+        pill.flash('error', title, detail, 4500);
       } finally {
-        if (!cancelled) {
-          pollTimeoutRef.current = setTimeout(pollAudioLevel, POLL_INTERVAL);
-        }
+        setCapture(hasGroqKey());
       }
     };
 
-    pollAudioLevel();
-
-    return () => {
-      cancelled = true;
-      resetWaveform();
+    const onMicError = () => {
+      pill.flash('error', 'Microphone unavailable', 'Check it is connected and allowed', 4500);
     };
-  }, [pillState, resetWaveform, updateBars]);
 
-  useEffect(() => {
-    if (pillState === 'hidden') {
-      // Delay hiding to allow exit animation
-      const t = setTimeout(() => setIsVisible(false), 200);
-      hidePillWindow();
-      return () => clearTimeout(t);
-    } else {
-      setIsVisible(true);
-    }
-  }, [pillState]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let unlistenFn: (() => void) | null = null;
-
-    listen('settings-changed', async () => {
-      if (cancelled) return;
-      await useAppStore.persist.rehydrate();
-    }).then((fn) => {
-      if (cancelled) fn();
-      else unlistenFn = fn;
-    });
+    const subscriptions = [
+      listen('shortcut-down', onPress),
+      listen('recording-started', onStarted),
+      listen('shortcut-up', () => void onRelease()),
+      listen('shortcut-cancel', onCancel),
+      listen('recording-error', onMicError),
+      listen('settings-changed', () => void useAppStore.persist.rehydrate()),
+    ];
 
     return () => {
-      cancelled = true;
-      if (unlistenFn) unlistenFn();
+      unsubscribe();
+      pill.clearTimers();
+      // listen() resolves asynchronously; unsubscribe whenever it does.
+      subscriptions.forEach((pending) => pending.then((unlisten) => unlisten()).catch(() => {}));
     };
   }, []);
 
+  // Level meter and clock. Written straight to the DOM ~30 times a second;
+  // routing that through React state re-rendered the whole pill per frame.
   useEffect(() => {
-    let unlistenDown: (() => void) | null = null;
-    let unlistenUp: (() => void) | null = null;
-    let unlistenMute: (() => void) | null = null;
-    let cancelled = false;
-    let didMute = false;
+    if (view.phase !== 'listening') return;
+    let alive = true;
+    let smooth = 0;
+    const levels = new Array<number>(BAR_COUNT).fill(0);
 
-    const setup = async () => {
-      await new Promise<void>((resolve) => {
-        if (useAppStore.persist.hasHydrated()) {
-          resolve();
-        } else {
-          const unsub = useAppStore.persist.onFinishHydration(() => {
-            unsub();
-            resolve();
-          });
+    const tick = async () => {
+      if (!alive) return;
+      let rms = 0;
+      try {
+        rms = await invoke<number>('get_audio_level');
+      } catch {
+        /* treat as silence */
+      }
+      if (!alive) return;
+      // Absolute dBFS scale: room noise stays low, speech fills the meter,
+      // loud speech doesn't look the same as quiet speech.
+      const db = 20 * Math.log10(Math.max(rms, 1e-6));
+      const target = Math.min(1, Math.max(0, (db + 54) / 40));
+      smooth += (target - smooth) * (target > smooth ? 0.6 : 0.2);
+      levels.shift();
+      levels.push(smooth);
+
+      const bars = barsRef.current?.children;
+      if (bars) {
+        for (let i = 0; i < bars.length; i++) {
+          (bars[i] as HTMLElement).style.transform = `scaleY(${(0.14 + levels[i] * 0.86).toFixed(3)})`;
         }
-      });
-
-      if (cancelled) return;
-
-      let recordingStartTime = 0;
-
-      const unmuteIfNeeded = () => {
-        if (!didMuteRef.current) return;
-        invoke('unmute_system', { didMute: true }).catch(() => {});
-        didMuteRef.current = false;
-        cleanupOnMuteEventRef.current = false;
-      };
-
-      const cleanupNativeCapture = () => {
-        if (!muteEventSeenRef.current) {
-          cleanupOnMuteEventRef.current = true;
-        }
-        invoke('stop_recording').catch(() => {});
-        unmuteIfNeeded();
-      };
-
-      unlistenMute = await listen<boolean>('audio-muted', (event) => {
-        didMute = event.payload;
-        didMuteRef.current = event.payload;
-        muteEventSeenRef.current = true;
-
-        if (cleanupOnMuteEventRef.current) {
-          cleanupOnMuteEventRef.current = false;
-          unmuteIfNeeded();
-        }
-      });
-
-      unlistenDown = await listen('shortcut-down', async () => {
-        if (pillStateRef.current !== 'hidden') {
-          cleanupNativeCapture();
-          return;
-        }
-
-        didMute = false;
-        didMuteRef.current = false;
-        muteEventSeenRef.current = false;
-        cleanupOnMuteEventRef.current = false;
-        
-        const apiKey = useAppStore.getState().apiKey;
-
-        if (!apiKey) {
-          cleanupNativeCapture();
-          setPillState('error');
-          setStatusMsg('API Key missing - set it in Settings');
-          setTextKey(k => k + 1);
-          setTimeout(() => {
-            setPillState('hidden');
-          }, 3000);
-          return;
-        }
-
-        setPillState('listening');
-        setStatusMsg('Listening...');
-        setTextKey(k => k + 1);
-        recordingStartTime = Date.now();
-        playStartEarcon();
-
-        // Recording and muting are now handled directly in Rust for speed.
-      });
-
-      unlistenUp = await listen('shortcut-up', async () => {
-        if (pillStateRef.current !== 'listening') return;
-
-        const rawDuration = recordingStartTime > 0 ? (Date.now() - recordingStartTime) / 1000 : 0;
-        // Enforce a minimum of 0.5 seconds so extremely short dictations don't evaluate to 0
-        const recordingDurationSeconds = Math.max(rawDuration, 0.5);
-
-        setPillState('processing');
-        setStatusMsg('Transcribing...');
-        setTextKey(k => k + 1);
-
-        if (!muteEventSeenRef.current) {
-          cleanupOnMuteEventRef.current = true;
-        }
-        invoke('unmute_system', { didMute }).catch(() => {});
-        didMute = false;
-        didMuteRef.current = false;
-
-        try {
-          const base64Audio: string = await invoke('stop_recording');
-
-          const { apiKey, cerebrasApiKey, whisperModel, llamaModel, llamaProvider } = useAppStore.getState();
-
-          const rawText = await transcribeAudio(base64Audio, apiKey, whisperModel);
-
-          if (!rawText || rawText.trim().length === 0) {
-            setPillState('hidden');
-            return;
-          }
-
-          setStatusMsg('Cleaning up...');
-          setTextKey(k => k + 1);
-          const activeCleanupKey = llamaProvider === 'cerebras' ? cerebrasApiKey : apiKey;
-          let cleanText = await cleanupTextWithProvider(rawText, llamaProvider, activeCleanupKey, llamaModel, apiKey);
-
-          const snippets = useAppStore.getState().snippets;
-          for (const snippet of snippets) {
-            const trigger = snippet.trigger_phrase.toLowerCase();
-            const normalizedText = cleanText.toLowerCase().replace(/-/g, '');
-            const normalizedTrigger = trigger.replace(/-/g, '');
-            if (normalizedText.includes(normalizedTrigger)) {
-              const escapedTrigger = snippet.trigger_phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const flexPattern = escapedTrigger.split('').join('-?');
-              cleanText = cleanText.replace(new RegExp(flexPattern, 'gi'), snippet.expansion);
-            }
-          }
-
-          const historyItem = {
-            id: Date.now(),
-            transcript: cleanText,
-            duration_seconds: recordingDurationSeconds,
-            created_at: new Date().toISOString(),
-          };
-
-          useAppStore.getState().addHistoryItem(historyItem);
-          await invoke('paste_text', { text: cleanText });
-          // Other windows only mirror the dashboard, so don't hold up the paste
-          // waiting on that broadcast.
-          emit('history-sync', historyItem).catch(() => {});
-
-          playSuccessEarcon();
-          setPillState('done');
-          setStatusMsg(cleanText.substring(0, 40) + (cleanText.length > 40 ? '...' : ''));
-          setTextKey(k => k + 1);
-          setTimeout(() => {
-            setPillState('hidden');
-          }, 1800);
-        } catch (err: unknown) {
-          setPillState('error');
-          setStatusMsg(describeProcessingError(err));
-          setTextKey(k => k + 1);
-          setTimeout(() => {
-            setPillState('hidden');
-          }, 3000);
-        }
-      });
+      }
+      if (clockRef.current) clockRef.current.textContent = formatElapsed(Date.now() - startedAt.current);
+      window.setTimeout(tick, 33);
     };
-
-    setup();
-
+    void tick();
     return () => {
-      cancelled = true;
-      unlistenDown?.();
-      unlistenUp?.();
-      unlistenMute?.();
+      alive = false;
     };
-  }, []);
+  }, [view.phase]);
 
-  if (!isVisible && pillState === 'hidden') return null;
+  if (view.phase === 'idle') return <div role="status" aria-live="polite" className="sr-only" />;
 
-  const exiting = pillState === 'hidden';
+  const stageIndex = STAGES.indexOf(view.phase);
+  const statusText =
+    view.phase === 'listening'
+      ? 'Listening'
+      : view.phase === 'starting'
+        ? 'Starting microphone'
+      : stageIndex >= 0
+        ? `${STAGE_LABEL[view.phase]}…`
+        : [view.title, view.detail].filter(Boolean).join('. ');
 
   return (
-    <div
-      className={`w-full h-full flex items-center px-4 gap-3 relative overflow-hidden rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.04)] transition-all duration-200 ${
-        exiting ? 'pill-exit-active' : 'pill-enter-active'
-      }`}
-      style={{
-        height: '48px',
-        borderRadius: '24px',
-        background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(16px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(140%)',
-      }}
-    >
-      <div
-        className="absolute inset-0 rounded-full pointer-events-none"
-        style={{
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.06) 50%, rgba(217,70,239,0.06) 100%)',
-        }}
-      />
+    <div className="pill-stage">
+      <div role="status" aria-live={view.phase === 'error' ? 'assertive' : 'polite'} className="sr-only">
+        {statusText}
+      </div>
 
-      <div className="relative z-10 flex items-center w-full gap-3">
-        <div
-          className={`flex items-center justify-center shrink-0 border transition-all duration-300 ${
-            pillState === 'listening'
-              ? 'h-10 min-w-[78px] rounded-full px-3 border-rose-200/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_4px_12px_rgba(244,63,94,0.08)]'
-              : 'w-10 h-10 rounded-full bg-white/40 border-white/60 shadow-sm'
-          }`}
-          style={
-            pillState === 'listening'
-              ? {
-                  background:
-                    'radial-gradient(circle at top, rgba(255,255,255,0.85), transparent 55%), linear-gradient(135deg, rgba(244,63,94,0.04), rgba(251,146,60,0.04))',
-                }
-              : undefined
-          }
-        >
-          {pillState === 'listening' && (
-            <div className="flex items-center gap-2 h-6 w-full">
-              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0 listening-dot" />
-
-              <div className="flex items-center gap-[2px] h-6 flex-1">
-                {barHeights.map((height, index) => (
-                  <div
-                    key={index}
-                    className="w-[2px] rounded-full bg-gradient-to-t from-rose-500 to-amber-400 shadow-sm waveform-bar"
-                    style={{
-                      height: `${height}px`,
-                      opacity: 0.48 + (height / MAX_BAR_HEIGHT) * 0.52,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {pillState === 'processing' && (
-            <div className="flex gap-1.5">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)] processing-dot"
-                />
+      <div className={`pill ${shown ? 'pill-in' : 'pill-out'}`} data-phase={view.phase} aria-hidden="true">
+        {isCapturing(view.phase) && (
+          <>
+            <span className="pill-rec" />
+            <div ref={barsRef} className="pill-meter">
+              {Array.from({ length: BAR_COUNT }, (_, i) => (
+                <span key={i} />
               ))}
             </div>
-          )}
+            <span ref={clockRef} className="pill-clock">
+              0:00
+            </span>
+          </>
+        )}
 
-          {pillState === 'done' && (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 drop-shadow-sm" />
-          )}
-          {pillState === 'error' && (
-            <AlertTriangle className="w-5 h-5 text-rose-500 drop-shadow-sm" />
-          )}
-        </div>
+        {stageIndex >= 0 && (
+          <>
+            <div className="pill-steps">
+              {STAGES.map((stage, i) => (
+                <span key={stage} data-state={i < stageIndex ? 'done' : i === stageIndex ? 'active' : 'todo'} />
+              ))}
+            </div>
+            <span className="pill-title">{STAGE_LABEL[view.phase]}</span>
+          </>
+        )}
 
-        <div className="flex-1 min-w-0 pr-2 overflow-hidden">
-          <span
-            key={textKey}
-            className="block text-[15px] font-bold text-gray-800 truncate tracking-wide pill-text-enter-active"
-          >
-            {statusMsg}
-          </span>
-        </div>
+        {(view.phase === 'done' || view.phase === 'error' || view.phase === 'notice') && (
+          <>
+            <span className="pill-icon">
+              {view.phase === 'done' ? (
+                <Check className="h-4 w-4" strokeWidth={2.6} />
+              ) : view.phase === 'error' ? (
+                <AlertTriangle className="h-4 w-4" strokeWidth={2.2} />
+              ) : (
+                <Info className="h-4 w-4" strokeWidth={2.2} />
+              )}
+            </span>
+            <span className="pill-text">
+              <span className="pill-title">{view.title}</span>
+              {view.detail && <span className="pill-detail">{view.detail}</span>}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

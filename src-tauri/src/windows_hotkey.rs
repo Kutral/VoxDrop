@@ -8,11 +8,13 @@ mod imp {
     use tauri::{AppHandle, Emitter};
     use windows_sys::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, DispatchMessageW, GetMessageW, SetTimer, SetWindowsHookExW,
         TranslateMessage, UnhookWindowsHookEx, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, MSG,
         WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
     };
+
 
     const VK_SHIFT: u16 = 0x10;
     const VK_CONTROL: u16 = 0x11;
@@ -30,6 +32,9 @@ mod imp {
     enum ShortcutSignal {
         Down,
         Up,
+        /// The combo was broken by an extra key (e.g. Ctrl+Win+Left to switch
+        /// desktops), so this was a different shortcut, not a dictation.
+        Cancel,
     }
 
     static SHARED_STATE: OnceLock<SharedState> = OnceLock::new();
@@ -38,6 +43,9 @@ mod imp {
         hotkey: Mutex<Option<ModifierHotkey>>,
         shortcut_tx: Sender<ShortcutSignal>,
         is_active: AtomicBool,
+        /// After a cancel, stay quiet until every modifier is released so the
+        /// leftover Ctrl+Win doesn't immediately start a new dictation.
+        suppressed: AtomicBool,
         ctrl_down: AtomicBool,
         alt_down: AtomicBool,
         shift_down: AtomicBool,
@@ -133,10 +141,13 @@ mod imp {
                 && self.shift == state.shift_down.load(Ordering::SeqCst)
                 && self.super_key == state.super_down.load(Ordering::SeqCst);
 
-            let main_keys_match = {
-                let down = state.main_keys_down.lock().unwrap();
-                *down == self.vk_codes
-            };
+            // Never unwrap inside the hook: a panic across `extern "system"`
+            // aborts the process.
+            let main_keys_match = state
+                .main_keys_down
+                .lock()
+                .map(|down| *down == self.vk_codes)
+                .unwrap_or(false);
 
             modifiers_match && main_keys_match
         }
@@ -149,6 +160,7 @@ mod imp {
             hotkey: Mutex::new(None),
             shortcut_tx,
             is_active: AtomicBool::new(false),
+            suppressed: AtomicBool::new(false),
             ctrl_down: AtomicBool::new(false),
             alt_down: AtomicBool::new(false),
             shift_down: AtomicBool::new(false),
@@ -171,6 +183,9 @@ mod imp {
                     ShortcutSignal::Up => {
                         let _ = app.emit("shortcut-up", ());
                     }
+                    ShortcutSignal::Cancel => {
+                        let _ = app.emit("shortcut-cancel", ());
+                    }
                 }
             }
         });
@@ -180,12 +195,16 @@ mod imp {
             let mut hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
 
             if hook.is_null() {
+                eprintln!("[hotkey] SetWindowsHookExW failed; modifier hotkey unavailable");
                 return;
             }
 
+            // A 1 s tick resyncs key state with the OS. Key-ups that happen on
+            // the secure desktop (Win+L, UAC, Ctrl+Alt+Del) never reach a
+            // low-level hook, and a modifier stuck "down" made the pill pop up
+            // on a lone Ctrl press.
             let timer_id = 1usize;
-            let timer_interval_ms = 30_000u32; // check every 30 seconds
-            SetTimer(std::ptr::null_mut(), timer_id, timer_interval_ms, None);
+            SetTimer(std::ptr::null_mut(), timer_id, 1_000, None);
 
             const WM_TIMER: u32 = 0x0113;
             let mut message: MSG = std::mem::zeroed();
@@ -194,11 +213,23 @@ mod imp {
 
             while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
                 if message.message == WM_TIMER {
+                    if let Some(state) = SHARED_STATE.get() {
+                        resync_with_os(state, None);
+                        evaluate(state, false);
+                    }
+
                     if last_reinstall.elapsed() >= reinstall_interval {
-                        let _ = UnhookWindowsHookEx(hook);
-                        hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
+                        // Install the replacement before dropping the old hook so
+                        // a failed reinstall never leaves us with no hook at all.
+                        let fresh =
+                            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), module_handle, 0);
+                        if fresh.is_null() {
+                            eprintln!("[hotkey] Keyboard hook reinstall failed; keeping the old hook");
+                        } else {
+                            let _ = UnhookWindowsHookEx(hook);
+                            hook = fresh;
+                        }
                         last_reinstall = std::time::Instant::now();
-                        eprintln!("[hotkey] Periodically re-installed keyboard hook to prevent silent OS unhooking");
                     }
                 }
                 TranslateMessage(&message);
@@ -207,6 +238,74 @@ mod imp {
 
             let _ = UnhookWindowsHookEx(hook);
         });
+    }
+
+    fn is_held(vk: u16) -> bool {
+        // High bit set = key is physically down right now. Inside a LL hook
+        // this reflects the state *before* the event being processed.
+        unsafe { (GetAsyncKeyState(vk as i32) as u16 & 0x8000) != 0 }
+    }
+
+    /// Overwrite our tracked state with what the OS says is held, skipping the
+    /// key of the event currently being processed (the OS hasn't applied it yet).
+    fn resync_with_os(state: &SharedState, current_vk: Option<u16>) {
+        let is_current = |group: &[u16]| current_vk.is_some_and(|vk| group.contains(&vk));
+
+        if !is_current(&[VK_CONTROL, VK_LCONTROL, VK_RCONTROL]) {
+            state.ctrl_down.store(is_held(VK_CONTROL), Ordering::SeqCst);
+        }
+        if !is_current(&[VK_MENU, VK_LMENU, VK_RMENU]) {
+            state.alt_down.store(is_held(VK_MENU), Ordering::SeqCst);
+        }
+        if !is_current(&[VK_SHIFT, VK_LSHIFT, VK_RSHIFT]) {
+            state.shift_down.store(is_held(VK_SHIFT), Ordering::SeqCst);
+        }
+        if !is_current(&[VK_LWIN, VK_RWIN]) {
+            state
+                .super_down
+                .store(is_held(VK_LWIN) || is_held(VK_RWIN), Ordering::SeqCst);
+        }
+        if let Ok(mut keys) = state.main_keys_down.lock() {
+            keys.retain(|&vk| Some(vk) == current_vk || is_held(vk));
+        }
+    }
+
+    fn any_modifier_down(state: &SharedState) -> bool {
+        state.ctrl_down.load(Ordering::SeqCst)
+            || state.alt_down.load(Ordering::SeqCst)
+            || state.shift_down.load(Ordering::SeqCst)
+            || state.super_down.load(Ordering::SeqCst)
+    }
+
+    /// Compare tracked state with the configured hotkey and emit transitions.
+    /// `key_went_down` distinguishes "user released the combo" (finish the
+    /// dictation) from "user pressed an extra key" (it was another shortcut).
+    fn evaluate(state: &SharedState, key_went_down: bool) {
+        let configured = state.hotkey.lock().ok().and_then(|guard| guard.clone());
+        let Some(hotkey) = configured else {
+            return;
+        };
+
+        if state.suppressed.load(Ordering::SeqCst) {
+            if !any_modifier_down(state) {
+                state.suppressed.store(false, Ordering::SeqCst);
+            }
+            return;
+        }
+
+        let should_be_active = hotkey.matches(state);
+        let was_active = state.is_active.swap(should_be_active, Ordering::SeqCst);
+
+        if should_be_active && !was_active {
+            let _ = state.shortcut_tx.send(ShortcutSignal::Down);
+        } else if !should_be_active && was_active {
+            if key_went_down {
+                state.suppressed.store(true, Ordering::SeqCst);
+                let _ = state.shortcut_tx.send(ShortcutSignal::Cancel);
+            } else {
+                let _ = state.shortcut_tx.send(ShortcutSignal::Up);
+            }
+        }
     }
 
     pub fn set_hotkey(value: &str) {
@@ -226,7 +325,12 @@ mod imp {
             if let Ok(mut hotkey) = state.hotkey.lock() {
                 *hotkey = parsed;
             }
-            state.is_active.store(false, Ordering::SeqCst);
+            // Changing the hotkey mid-hold must still end the session, or the
+            // pill would sit in "listening" forever.
+            if state.is_active.swap(false, Ordering::SeqCst) {
+                let _ = state.shortcut_tx.send(ShortcutSignal::Cancel);
+            }
+            state.suppressed.store(false, Ordering::SeqCst);
         }
     }
 
@@ -236,8 +340,12 @@ mod imp {
                 let event = &*(lparam as *const KBDLLHOOKSTRUCT);
                 let is_key_down = matches!(wparam as u32, WM_KEYDOWN | WM_SYSKEYDOWN);
                 let is_key_up = matches!(wparam as u32, WM_KEYUP | WM_SYSKEYUP);
+                // Our own paste injects Ctrl+V; counting it would end (or start)
+                // a dictation the user is still holding. Other injected input
+                // (software KVMs, AutoHotkey) still counts.
+                let ours = event.dwExtraInfo == crate::paste::INJECTED_MARKER;
 
-                if is_key_down || is_key_up {
+                if (is_key_down || is_key_up) && !ours {
                     let vk = event.vkCode as u16;
                     let is_pressed = is_key_down;
 
@@ -261,31 +369,17 @@ mod imp {
                     }
 
                     if !is_modifier {
-                        let mut down = state.main_keys_down.lock().unwrap();
-                        if is_pressed {
-                            down.insert(vk);
-                        } else {
-                            down.remove(&vk);
+                        if let Ok(mut down) = state.main_keys_down.lock() {
+                            if is_pressed {
+                                down.insert(vk);
+                            } else {
+                                down.remove(&vk);
+                            }
                         }
                     }
 
-                    // Pre-parsed in `set_hotkey` — no string parsing on keystrokes.
-                    let configured_hotkey = state
-                        .hotkey
-                        .lock()
-                        .ok()
-                        .and_then(|guard| guard.clone());
-
-                    if let Some(modifier_hotkey) = configured_hotkey {
-                        let should_be_active = modifier_hotkey.matches(state);
-                        let was_active = state.is_active.swap(should_be_active, Ordering::SeqCst);
-
-                        if should_be_active && !was_active {
-                            let _ = state.shortcut_tx.send(ShortcutSignal::Down);
-                        } else if !should_be_active && was_active {
-                            let _ = state.shortcut_tx.send(ShortcutSignal::Up);
-                        }
-                    }
+                    resync_with_os(state, Some(vk));
+                    evaluate(state, is_pressed);
                 }
             }
         }
